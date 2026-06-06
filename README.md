@@ -3,7 +3,7 @@
 
 ---
 
-**UPDATE**: Still works as of April 2026.
+**TIP**: If after submitting your password you get a _Due to technical difficulties we are unable to process your request_ error message just manually press the 'Log in' button again and it should log you in without issues.
 
 Upwork Scraper is designed to automate the process of scraping job postings from **Upwork Best Matches**. It utilizes Selenium for web scraping and interacts with the Upwork website to extract job details, including job titles, descriptions, and proposals. The script then stores the extracted data in a SQLite database for easy access and retrieval.
 
