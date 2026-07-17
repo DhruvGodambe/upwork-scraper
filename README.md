@@ -105,10 +105,10 @@ UPWORK_PASSWORD = "53cR3tp455w0rD"
 
 # Chrome driver settings
 CHROME_VERSIONS = [
-    146,
-    147,
+    149,
 ]
 MAX_ATTEMPTS = 3
+VERIFICATION_PAUSE = 20
 
 ```
 
