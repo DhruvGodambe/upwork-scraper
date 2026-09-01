@@ -3,7 +3,7 @@
 
 ---
 
-**TIP**: If after submitting your password you get a _Due to technical difficulties we are unable to process your request_ error message just manually press the 'Log in' button again and it should log you in without issues.
+Upwork Scraper performs a single authenticated scrape of Upwork Best Matches and stores job data in SQLite. The browser remains visible so Upwork verification or two-factor authentication can be completed manually when required.
 
 Upwork Scraper is designed to automate the process of scraping job postings from **Upwork Best Matches**. It utilizes Selenium for web scraping and interacts with the Upwork website to extract job details, including job titles, descriptions, and proposals. The script then stores the extracted data in a SQLite database for easy access and retrieval.
 
@@ -14,7 +14,7 @@ The script provides a streamlined solution for users who want to efficiently sea
 
 - **Time Saving:** Automates the process of scraping job postings from Upwork, saving users time and effort.
 - **Efficient Job Search:** Facilitates a more efficient job search experience by automatically collecting and organizing job details.
-- **Customizable Interval:** Allows users to set the interval between scraping jobs according to their preferences.
+- **Scheduler Friendly:** Each invocation performs one scrape and exits; use cron or systemd for recurring runs.
 
 ## Key Features
 
@@ -36,16 +36,37 @@ Use this script at your own discretion and risk.
 
 ## Requirements
 
-- Python 3.x
+- Python 3.11+
 - Selenium
 - Undetected Chromedriver
 - SQLite3
+- Google Chrome or Chromium
 
 ## Tested Environment
 
 This program has been tested and verified to work correctly in Python 3.11.
 
-## Installation
+## Installation with uv (recommended)
+
+Install [uv](https://docs.astral.sh/uv/) and synchronize the locked environment:
+
+```bash
+uv sync
+```
+
+Run the scraper with:
+
+```bash
+uv run upwork-scraper
+```
+
+The legacy command remains supported:
+
+```bash
+uv run python upwork_best_matches_scraper.py
+```
+
+## Installation with pip
 
 1. **Create Virtual Environment:** It's recommended to create a virtual environment to isolate the dependencies of this project. You can create a virtual environment with Python 3.11 using the following command:
 
@@ -87,46 +108,48 @@ This program has been tested and verified to work correctly in Python 3.11.
     pip install -r requirements.txt
     ```
 
-## Configuration file
+## Configuration
 
-Create a folder named `settings` and add a __init__.py file inside it. 
+Copy `.env.example` to `.env` and set the required credentials:
 
 ```
-settings/__init__.py
+cp .env.example .env
 ```
 
-Inside the `settings` folder put a `config.py` file with the following content (adjust to your needs) and save the file.
+`.env` must not be committed. For production or scheduled execution, environment variables may be supplied directly by the service manager instead.
 
-```commandline
-# Upwork credentials
-UPWORK_USER_NAME = "John"
-UPWORK_USERNAME = "john@doe.com"
-UPWORK_PASSWORD = "53cR3tp455w0rD"
-
-# Chrome driver settings
-CHROME_VERSIONS = [
-    149,
-]
-MAX_ATTEMPTS = 3
-VERIFICATION_PAUSE = 20
-
+```dotenv
+UPWORK_USERNAME=your-email@example.com
+UPWORK_PASSWORD=replace-me
 ```
 
 **Configuration**
-* UPWORK_USER_NAME: Replace `John` with the **first name** shown next to your profile picture on the right side panel. So if the name shown next to your profile pic says "John Smith" provide the script with `John`.
- Login and navigate to [Upwork Best Matches](https://www.upwork.com/nx/find-work/best-matches) to double-check what is the first name of your full name that appears on your profile description. 
-* UPWORK_USERNAME: Your Upwork username or email.
-* UPWORK_PASSWORD: Your Upwork password. 
-* CHROME_VERSIONS: The Chrome versions installed in your system. No need to put the whole version number. So if your Chrome version is 90.0.4430.212, you just need to put 90 in the list. 
-* MAX_ATTEMPTS: Max number of attempts Selenium will try to launch the Chromedriver.
+* `UPWORK_USERNAME` and `UPWORK_PASSWORD` are required.
+* `UPWORK_USER_NAME` is optional and can contain the first name shown in the Upwork profile panel.
+* `BROWSER_EXECUTABLE_PATH` is optional. Without it, Google Chrome is preferred and Chromium is used as a fallback.
+* `UPWORK_DATABASE_PATH`, `UPWORK_VERIFICATION_TIMEOUT`, and `LOG_LEVEL` are optional.
+
+The browser major version is detected automatically. Users should not normally maintain a Chrome version list.
+
+Validate configuration without starting a browser login:
+
+```bash
+uv run upwork-scraper --check-config
+```
 
 
 ## Usage
 
-Run Upwork Scraper with the following command:
+Run one scrape with the recommended command:
 
 ```bash
-python upwork_best_matches_scraper.py
+uv run upwork-scraper
+```
+
+The legacy entrypoint is also supported:
+
+```bash
+uv run python upwork_best_matches_scraper.py
 ```
 
 ## Functionality
@@ -149,11 +172,9 @@ Create a `launch_upwork_scraper.sh` file and put it inside a `bin` folder in the
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 parent="$(dirname "$DIR")"
 
-# Activate virtualenv
-source /path/to/your/venv/activate
-
-# Run
-nohup /path/to/your/venv/bin/python "$parent/upwork_best_matches_scraper.py" > /dev/null 2>&1 &
+# Run one scrape
+cd "$parent"
+nohup uv run upwork-scraper > /dev/null 2>&1 &
 ```
 ^ Edit the paths according to your virtual environment location.
 
