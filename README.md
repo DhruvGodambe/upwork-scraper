@@ -71,63 +71,22 @@ uv run python upwork_best_matches_scraper.py
 Install the pre-commit hooks once per clone:
 
 ```bash
-pre-commit install
+uv run pre-commit install
 ```
 
 The hooks run Ruff and Gitleaks before each commit. Gitleaks scans staged changes for
 credentials and other secrets. Install Gitleaks separately and ensure it is available on
-your `PATH`; the project pins the hook definition to Gitleaks `v8.30.1`.
+your `PATH`; use the [official Gitleaks releases](https://github.com/gitleaks/gitleaks/releases)
+for installation. The project pins the hook definition to Gitleaks `v8.30.1`.
 
 To run all hooks manually:
 
 ```bash
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
 If Gitleaks reports a real secret, stop and rotate it before committing. Do not bypass the
 hook unless the finding has been reviewed and is demonstrably a false positive.
-
-## Installation with pip
-
-1. **Create Virtual Environment:** It's recommended to create a virtual environment to isolate the dependencies of this project. You can create a virtual environment with Python 3.11 using the following command:
-
-    ```bash
-    python3 -m venv venv
-    ```
-
-    This command will create a virtual environment named `venv` in the current directory.
-
-2. **Activate Virtual Environment:** After creating the virtual environment, activate it using the appropriate command for your operating system:
-
-    - On Windows:
-
-        ```bash
-        .\venv\Scripts\activate
-        ```
-
-    - On macOS and Linux:
-
-        ```bash
-        source venv/bin/activate
-        ```
-      
-3. **Clone the repository:**
-   
-    ```
-    git clone https://github.com/roperi/UpworkScraper.git
-    ```
-
-4. **Navigate to the project directory:**
-   
-    ```
-    cd UpworkScraper/
-    ```
-
-5. **Install the required dependencies:**
-   
-    ```
-    pip install -r requirements.txt
-    ```
 
 ## Configuration
 

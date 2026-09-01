@@ -23,6 +23,7 @@ include = ["upwork_scraper*", "utils*"]
 [dependency-groups]
 dev = [
     "mypy>=1.10,<2",
+    "pre-commit>=3,<5",
     "pytest>=8,<9",
     "ruff>=0.6,<1",
 ]
