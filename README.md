@@ -66,9 +66,12 @@ The legacy command remains supported:
 uv run python upwork_best_matches_scraper.py
 ```
 
-### Install local commit checks
+### Maintainer and contributor checks
 
-Install the pre-commit hooks once per clone:
+Gitleaks and pre-commit are development safeguards, not runtime requirements. Typical users
+who only install and run Upwork Scraper can skip this section.
+
+Maintainers and contributors should install the pre-commit hooks once per clone:
 
 ```bash
 uv run pre-commit install
