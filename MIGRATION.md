@@ -23,7 +23,7 @@ Copy the example environment file and set your own credentials:
 cp .env.example .env
 ```
 
-Set `UPWORK_USERNAME`, `UPWORK_PASSWORD`, and `UPWORK_USER_NAME` in `.env`. The latter is the
+Set `UPWORK_USERNAME`, `UPWORK_PASSWORD`, and `UPWORK_FIRST_NAME` in `.env`. The latter is the
 first name shown in the Upwork profile panel and is currently required to isolate job text. The
 legacy `settings/config.py` file is
 no longer read and must not be used for credentials. Never commit `.env` or any file containing

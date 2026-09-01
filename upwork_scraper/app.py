@@ -122,8 +122,8 @@ def main(argv: list[str] | None = None) -> bool:
             )
         )[-1]
         text = jobs_container.text
-        if settings.user_name:
-            text = text.split(settings.user_name)[0]
+        if settings.first_name:
+            text = text.split(settings.first_name)[0]
         text = text.split("Ordered by most relevant.")[-1]
         job_posts = text.split("Posted")[1:]
         job_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/jobs/')]")

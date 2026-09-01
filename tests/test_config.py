@@ -10,7 +10,7 @@ def test_load_settings_from_environment() -> None:
         {
             "UPWORK_USERNAME": "user@example.com",
             "UPWORK_PASSWORD": "secret",
-            "UPWORK_USER_NAME": "FirstName",
+            "UPWORK_FIRST_NAME": "FirstName",
             "UPWORK_DATABASE_PATH": "/tmp/jobs.db",
             "UPWORK_VERIFICATION_TIMEOUT": "45",
             "UPWORK_BROWSER_PROFILE_DIR": "/tmp/upwork-profile",
@@ -34,7 +34,7 @@ def test_invalid_timeout_fails() -> None:
             {
                 "UPWORK_USERNAME": "user@example.com",
                 "UPWORK_PASSWORD": "secret",
-                "UPWORK_USER_NAME": "FirstName",
+                "UPWORK_FIRST_NAME": "FirstName",
                 "UPWORK_VERIFICATION_TIMEOUT": "never",
             }
         )
@@ -45,7 +45,7 @@ def test_proxy_server_is_normalized_and_loaded() -> None:
         {
             "UPWORK_USERNAME": "user@example.com",
             "UPWORK_PASSWORD": "secret",
-            "UPWORK_USER_NAME": "FirstName",
+            "UPWORK_FIRST_NAME": "FirstName",
             "UPWORK_PROXY_SERVER": "127.0.0.1:1080",
         }
     )
@@ -58,5 +58,5 @@ def test_proxy_server_rejects_embedded_credentials() -> None:
 
 
 def test_missing_profile_name_fails() -> None:
-    with pytest.raises(ConfigurationError, match="UPWORK_USER_NAME must be set"):
+    with pytest.raises(ConfigurationError, match="UPWORK_FIRST_NAME must be set"):
         load_settings({"UPWORK_USERNAME": "user@example.com", "UPWORK_PASSWORD": "secret"})

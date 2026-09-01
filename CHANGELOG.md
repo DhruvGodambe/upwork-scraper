@@ -20,7 +20,7 @@ import paths changed.
 - Reorganized database and parsing modules under `upwork_scraper`.
 - CI now uses the Makefile quality gate.
 - SQLite is the only supported persistence format.
-- `UPWORK_USER_NAME` is required for reliable job-results parsing.
+- `UPWORK_FIRST_NAME` is required for reliable job-results parsing.
 
 ### Removed
 
