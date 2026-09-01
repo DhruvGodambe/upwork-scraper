@@ -62,13 +62,18 @@ Run the scraper with:
 uv run upwork-scraper
 ```
 
-The Makefile provides equivalent shortcuts for common development commands:
+For maintainers and contributors, the Makefile is the canonical interface for local development:
 
 ```bash
+make help          # list available targets
 make install       # synchronize the locked uv environment
 make check         # run tests, lint, formatting, and type checks
 make validate      # validate local configuration and browser discovery
+make validate-login # run the live login validation
 ```
+
+The `make hooks` and `make security` targets are maintainer-only safeguards. Typical users
+can use the `uv run` commands below without installing Gitleaks or pre-commit.
 
 The legacy command remains supported:
 
