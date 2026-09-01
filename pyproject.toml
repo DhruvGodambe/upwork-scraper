@@ -1,6 +1,6 @@
 [project]
 name = "upwork-scraper"
-version = "1.0.0"
+version = "2.0.0"
 description = "A resilient one-shot scraper for Upwork Best Matches."
 readme = "README.md"
 requires-python = ">=3.11"

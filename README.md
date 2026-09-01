@@ -39,6 +39,7 @@ Use this script at your own discretion and risk.
 ## Requirements
 
 - Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
 - Selenium
 - Undetected Chromedriver
 - SQLite3
@@ -53,8 +54,10 @@ This program has been tested and verified to work correctly in Python 3.11.
 Install [uv](https://docs.astral.sh/uv/) and synchronize the locked environment:
 
 ```bash
-uv sync
+uv sync --locked
 ```
+
+Upgrading from the previous project layout? Read the [migration guide](MIGRATION.md) first.
 
 Run the scraper with:
 

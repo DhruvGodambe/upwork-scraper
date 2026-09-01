@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+The next release is planned as version 2.0.0 because configuration, installation, and module
+import paths changed.
+
 ### Added
 
 - Environment-based credential and runtime configuration.
