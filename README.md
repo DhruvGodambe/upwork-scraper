@@ -5,6 +5,8 @@
 
 Upwork Scraper performs a single authenticated scrape of Upwork Best Matches and stores job data in SQLite. The browser remains visible so Upwork verification or two-factor authentication can be completed manually when required.
 
+SQLite is the application's only persistence format. The scraper does not create or export CSV files.
+
 Upwork Scraper is designed to automate the process of scraping job postings from **Upwork Best Matches**. It utilizes Selenium for web scraping and interacts with the Upwork website to extract job details, including job titles, descriptions, and proposals. The script then stores the extracted data in a SQLite database for easy access and retrieval.
 
 The script provides a streamlined solution for users who want to efficiently search for new job opportunities on Upwork without the hassle of manually browsing through job listings.
