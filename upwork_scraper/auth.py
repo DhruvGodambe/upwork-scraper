@@ -1,0 +1,141 @@
+"""Upwork authentication workflow."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+
+from selenium.common.exceptions import (
+    InvalidSessionIdException,
+    StaleElementReferenceException,
+    TimeoutException,
+)
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+
+from .config import Settings
+
+LOGIN_URL = "https://www.upwork.com/ab/account-security/login"
+BEST_MATCHES_URL = "https://www.upwork.com/nx/find-work/best-matches"
+
+
+def _visible_button(driver):
+    for button in driver.find_elements(By.CSS_SELECTOR, "form#login button"):
+        try:
+            if (
+                button.is_displayed()
+                and button.is_enabled()
+                and button.text.strip() in {"Continue", "Log in", "Sign in"}
+            ):
+                return button
+        except StaleElementReferenceException:
+            continue
+    return None
+
+
+def _dismiss_cookie_consent(driver) -> None:
+    """Dismiss the consent overlay on a fresh automation profile."""
+
+    for _ in range(10):
+        buttons = driver.find_elements(By.TAG_NAME, "button")
+        consent = next(
+            (
+                button
+                for button in buttons
+                if button.is_displayed() and button.text.strip() in {"Reject All", "Accept All"}
+            ),
+            None,
+        )
+        if consent is not None:
+            # The consent controls can be below the viewport and Selenium's
+            # coordinate click can be intercepted by the fixed overlay itself.
+            driver.execute_script("arguments[0].click()", consent)
+            return
+        time.sleep(0.5)
+
+
+def _click_submit(driver, field) -> None:
+    button = _visible_button(driver)
+    if button is not None:
+        button.click()
+    else:
+        field.send_keys(Keys.ENTER)
+
+
+def _authenticated(driver) -> bool:
+    try:
+        if "/account-security/login" in driver.current_url:
+            return False
+        return not any(e.is_displayed() for e in driver.find_elements(By.ID, "login_password"))
+    except StaleElementReferenceException:
+        return False
+    except InvalidSessionIdException as exc:
+        raise RuntimeError("Chrome closed the browser session during authentication") from exc
+
+
+def _visible_element_by_id(driver, element_id: str):
+    try:
+        return next((e for e in driver.find_elements(By.ID, element_id) if e.is_displayed()), None)
+    except StaleElementReferenceException:
+        return None
+
+
+def _body_text(driver) -> str:
+    try:
+        return driver.find_element(By.TAG_NAME, "body").text
+    except Exception:
+        return ""
+
+
+def _login_warning(text: str) -> str | None:
+    markers = (
+        "technical difficulties",
+        "incorrect",
+        "abnormal behavior",
+        "unusual activity",
+        "suspicious activity",
+    )
+    return next((marker for marker in markers if marker in text), None)
+
+
+def login(driver, settings: Settings, logger: Callable[[str], None]) -> None:
+    driver.get(LOGIN_URL)
+    _dismiss_cookie_consent(driver)
+    username = WebDriverWait(driver, 30).until(
+        lambda d: _visible_element_by_id(d, "login_username")
+    )
+    username.clear()
+    username.send_keys(settings.username)
+    _click_submit(driver, username)
+
+    try:
+        password = WebDriverWait(driver, 30).until(
+            lambda d: _visible_element_by_id(d, "login_password")
+        )
+    except TimeoutException as exc:
+        raise RuntimeError(f"Username step did not advance; page: {driver.current_url}") from exc
+
+    password.clear()
+    password.send_keys(settings.password)
+    _click_submit(driver, password)
+
+    deadline = time.monotonic() + settings.verification_timeout
+    reported_warning: str | None = None
+    while time.monotonic() < deadline:
+        if _authenticated(driver):
+            driver.get(BEST_MATCHES_URL)
+            return
+        text = _body_text(driver).lower()
+        warning = _login_warning(text)
+        if warning is not None and warning != reported_warning:
+            logger(
+                "Upwork displayed a login/security warning "
+                f"({warning}); waiting for manual resolution"
+            )
+            reported_warning = warning
+        time.sleep(1)
+    raise TimeoutException(
+        f"Authentication did not complete within {settings.verification_timeout} seconds; "
+        f"current URL: {driver.current_url}"
+    )

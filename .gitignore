@@ -88,8 +88,16 @@ bin/
 *.log
 log/
 tmp/
-config.py
 settings/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.ruff_cache/
+coverage.xml
+htmlcov/
+dist/
+*.egg-info/
 
 # Gunicorn
 run/
