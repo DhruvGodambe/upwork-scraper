@@ -40,7 +40,7 @@ def validate_proxy_server(value: str | None) -> str | None:
 @dataclass(frozen=True)
 class Settings:
     username: str
-    password: str = field(repr=False)
+    password: str | None = field(repr=False)
     first_name: str
     browser_executable_path: str | None = None
     proxy_server: str | None = None
@@ -66,10 +66,8 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     username = _env("UPWORK_USERNAME", values)
     password = _env("UPWORK_PASSWORD", values)
     first_name = _env("UPWORK_FIRST_NAME", values)
-    if not username or not password:
-        raise ConfigurationError(
-            "UPWORK_USERNAME and UPWORK_PASSWORD must be set in the environment or .env"
-        )
+    if not username:
+        raise ConfigurationError("UPWORK_USERNAME must be set in the environment or .env")
     if not first_name:
         raise ConfigurationError("UPWORK_FIRST_NAME must be set in the environment or .env")
 

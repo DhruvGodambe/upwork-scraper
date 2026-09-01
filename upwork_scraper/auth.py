@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from urllib.parse import urlsplit
 
 from selenium.common.exceptions import (
     InvalidSessionIdException,
@@ -18,6 +19,7 @@ from .config import Settings
 
 LOGIN_URL = "https://www.upwork.com/ab/account-security/login"
 BEST_MATCHES_URL = "https://www.upwork.com/nx/find-work/best-matches"
+PASSWORD_STEP_TIMEOUT = 30
 
 
 def _visible_button(driver):
@@ -65,7 +67,11 @@ def _click_submit(driver, field) -> None:
 
 def _authenticated(driver) -> bool:
     try:
-        if "/account-security/login" in driver.current_url:
+        parsed_url = urlsplit(driver.current_url)
+        hostname = parsed_url.hostname or ""
+        if hostname != "upwork.com" and not hostname.endswith(".upwork.com"):
+            return False
+        if "/account-security/login" in parsed_url.path:
             return False
         return not any(e.is_displayed() for e in driver.find_elements(By.ID, "login_password"))
     except StaleElementReferenceException:
@@ -109,16 +115,29 @@ def login(driver, settings: Settings, logger: Callable[[str], None]) -> None:
     username.send_keys(settings.username)
     _click_submit(driver, username)
 
-    try:
-        password = WebDriverWait(driver, 30).until(
-            lambda d: _visible_element_by_id(d, "login_password")
+    password = None
+    if settings.password is not None:
+        try:
+            password_step = WebDriverWait(driver, PASSWORD_STEP_TIMEOUT).until(
+                lambda d: _authenticated(d) or _visible_element_by_id(d, "login_password")
+            )
+            if password_step is not True:
+                password = password_step
+        except TimeoutException:
+            logger(
+                "Upwork did not display a password field; complete Google, Apple, "
+                "or another login step in the visible browser"
+            )
+    else:
+        logger(
+            "No UPWORK_PASSWORD is configured; complete Google, Apple, password, "
+            "or two-step verification in the visible browser"
         )
-    except TimeoutException as exc:
-        raise RuntimeError(f"Username step did not advance; page: {driver.current_url}") from exc
 
-    password.clear()
-    password.send_keys(settings.password)
-    _click_submit(driver, password)
+    if password is not None:
+        password.clear()
+        password.send_keys(settings.password)
+        _click_submit(driver, password)
 
     deadline = time.monotonic() + settings.verification_timeout
     reported_warning: str | None = None

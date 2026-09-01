@@ -125,7 +125,10 @@ UPWORK_PASSWORD=replace-me
 ```
 
 **Configuration**
-* `UPWORK_USERNAME` and `UPWORK_PASSWORD` are required.
+* `UPWORK_USERNAME` is required. `UPWORK_PASSWORD` is optional.
+  Accounts connected to Google or Apple can leave it unset and complete authentication manually
+  in the visible browser. The same manual flow supports Upwork password entry and two-step
+  verification.
 * `UPWORK_FIRST_NAME` is required and must contain the first name shown in the Upwork profile panel.
   The current scraper uses it to isolate the job-results text before parsing.
 * `BROWSER_EXECUTABLE_PATH` is optional. Without it, Google Chrome is preferred and Chromium is used as a fallback.
@@ -165,8 +168,9 @@ uv run upwork-scraper --validate-login
 ```
 
 This opens the dedicated visible browser profile and waits for any Upwork security verification
-or two-factor authentication. It is a manual integration check and is not part of the automated
-test suite or CI.
+or two-factor authentication. For accounts connected through Google or Apple, complete the
+provider login in this browser window. It is a manual integration check and is not part of the
+automated test suite or CI.
 
 The CLI also supports these overrides for one run:
 
@@ -197,6 +201,14 @@ Upwork Scraper performs the following tasks:
 1. Goes to the Upwork login page and logs you in.
 2. Scrapes job postings from Upwork Best Matches page.
 3. Parses job details and stores them in a SQLite database.
+
+### Google, Apple, and two-step login
+
+The scraper can automatically log in with native Upwork credentials when `UPWORK_PASSWORD` is
+set. If the account was created or connected through Google or Apple, leave `UPWORK_PASSWORD`
+unset and complete the provider login in the visible browser. Upwork two-step verification is
+also completed manually when prompted. The browser profile is persistent, so successful provider
+login and verification may be reused on later runs.
 
 ## Automate execution of script with a Cron job
 

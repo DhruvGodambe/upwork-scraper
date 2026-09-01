@@ -44,3 +44,15 @@ def test_validate_login_does_not_open_database(monkeypatch):
 
     assert app.main(["--validate-login"]) is True
     assert driver.closed is True
+
+
+def test_cli_converts_success_to_zero(monkeypatch):
+    monkeypatch.setattr(app, "main", lambda: True)
+
+    assert app.cli() == 0
+
+
+def test_cli_converts_failure_to_one(monkeypatch):
+    monkeypatch.setattr(app, "main", lambda: False)
+
+    assert app.cli() == 1
