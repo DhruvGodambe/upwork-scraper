@@ -124,7 +124,8 @@ def login(driver, settings: Settings, logger: Callable[[str], None]) -> None:
         warning = _login_warning(text)
         if warning is not None and warning != reported_warning:
             logger(
-                f"Upwork displayed a login/security warning ({warning}); waiting for manual resolution"
+                "Upwork displayed a login/security warning "
+                f"({warning}); waiting for manual resolution"
             )
             reported_warning = warning
         time.sleep(1)
