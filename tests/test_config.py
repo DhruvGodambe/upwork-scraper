@@ -12,12 +12,14 @@ def test_load_settings_from_environment() -> None:
             "UPWORK_PASSWORD": "secret",
             "UPWORK_DATABASE_PATH": "/tmp/jobs.db",
             "UPWORK_VERIFICATION_TIMEOUT": "45",
+            "UPWORK_BROWSER_PROFILE_DIR": "/tmp/upwork-profile",
         }
     )
     assert settings.username == "user@example.com"
     assert settings.password == "secret"
     assert settings.database_path == Path("/tmp/jobs.db")
     assert settings.verification_timeout == 45
+    assert settings.browser_profile_dir == Path("/tmp/upwork-profile")
 
 
 def test_missing_credentials_fail_without_exposing_values() -> None:

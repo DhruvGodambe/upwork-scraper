@@ -1,4 +1,4 @@
-from upwork_scraper.auth import _authenticated, _visible_button
+from upwork_scraper.auth import _authenticated, _login_warning, _visible_button
 
 
 class FakeElement:
@@ -51,3 +51,9 @@ def test_authenticated_requires_leaving_login_page():
 
     assert not _authenticated(login_driver)
     assert _authenticated(authenticated_driver)
+
+
+def test_login_warning_detects_security_interstitials():
+    assert _login_warning("We detected abnormal behavior") == "abnormal behavior"
+    assert _login_warning("The account has unusual activity") == "unusual activity"
+    assert _login_warning("Normal login page") is None
