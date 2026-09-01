@@ -19,7 +19,7 @@ from utils.job_helpers import parse_job_details
 
 from .auth import login
 from .browser import discover_browser, launch_driver
-from .config import ConfigurationError, load_settings
+from .config import ConfigurationError, load_settings, validate_proxy_server
 
 
 def _logger(level: str) -> logging.Logger:
@@ -42,6 +42,12 @@ def _arguments(argv: list[str] | None):
     parser.add_argument("--check-config", action="store_true", help="validate settings and browser")
     parser.add_argument("--database", help="SQLite database path")
     parser.add_argument("--browser-path", help="browser executable path")
+    parser.add_argument("--proxy-server", help="proxy URL or host:port")
+    parser.add_argument(
+        "--validate-login",
+        action="store_true",
+        help="validate live Upwork login without scraping or writing jobs",
+    )
     parser.add_argument("--verification-timeout", type=int)
     parser.add_argument("--log-level")
     return parser.parse_args(argv)
@@ -55,6 +61,8 @@ def main(argv: list[str] | None = None) -> bool:
             settings = replace(settings, database_path=Path(args.database))
         if args.browser_path:
             settings = replace(settings, browser_executable_path=args.browser_path)
+        if args.proxy_server:
+            settings = replace(settings, proxy_server=validate_proxy_server(args.proxy_server))
         if args.verification_timeout is not None:
             if args.verification_timeout <= 0:
                 raise ConfigurationError("--verification-timeout must be greater than zero")
@@ -74,6 +82,25 @@ def main(argv: list[str] | None = None) -> bool:
         except Exception as exc:
             print(f"Configuration error: {exc}", file=sys.stderr)
             return False
+
+    if args.validate_login:
+        driver = None
+        try:
+            driver, browser = launch_driver(settings)
+            logger.info("Using %s (%s)", browser.executable, browser.version)
+            logger.info("Validating Upwork login")
+            login(driver, settings, lambda message: logger.warning(message))
+            logger.info("Upwork login validation succeeded")
+            return True
+        except Exception:
+            logger.exception("Login validation failed")
+            return False
+        finally:
+            if driver is not None:
+                try:
+                    driver.quit()
+                except Exception:
+                    logger.warning("Browser was already closed")
 
     conn, cursor = connect_to_db(settings.database_path)
     driver = None

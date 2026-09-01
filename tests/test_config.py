@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from upwork_scraper.config import ConfigurationError, load_settings
+from upwork_scraper.config import ConfigurationError, load_settings, validate_proxy_server
 
 
 def test_load_settings_from_environment() -> None:
@@ -36,3 +36,19 @@ def test_invalid_timeout_fails() -> None:
                 "UPWORK_VERIFICATION_TIMEOUT": "never",
             }
         )
+
+
+def test_proxy_server_is_normalized_and_loaded() -> None:
+    settings = load_settings(
+        {
+            "UPWORK_USERNAME": "user@example.com",
+            "UPWORK_PASSWORD": "secret",
+            "UPWORK_PROXY_SERVER": "127.0.0.1:1080",
+        }
+    )
+    assert settings.proxy_server == "http://127.0.0.1:1080"
+
+
+def test_proxy_server_rejects_embedded_credentials() -> None:
+    with pytest.raises(ConfigurationError, match="must not contain proxy credentials"):
+        validate_proxy_server("socks5://user:secret@127.0.0.1:1080")

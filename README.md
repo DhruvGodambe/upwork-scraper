@@ -127,6 +127,8 @@ UPWORK_PASSWORD=replace-me
 * `UPWORK_USERNAME` and `UPWORK_PASSWORD` are required.
 * `UPWORK_USER_NAME` is optional and can contain the first name shown in the Upwork profile panel.
 * `BROWSER_EXECUTABLE_PATH` is optional. Without it, Google Chrome is preferred and Chromium is used as a fallback.
+* `UPWORK_PROXY_SERVER` is optional and accepts `http[s]://host:port`, `socks4://host:port`,
+  `socks5://host:port`, or `host:port` (HTTP shorthand).
 * `UPWORK_DATABASE_PATH`, `UPWORK_DRIVER_CACHE_DIR`, `UPWORK_BROWSER_PROFILE_DIR`,
   `UPWORK_VERIFICATION_TIMEOUT`, and `LOG_LEVEL` are optional.
 * The browser profile is persistent by default, so cookies and completed Upwork
@@ -135,11 +137,25 @@ UPWORK_PASSWORD=replace-me
 
 The browser major version is detected automatically. Users should not normally maintain a Chrome version list.
 
+If Upwork reports network restrictions, configure the same stable proxy route that works in
+your normal browser. Avoid alternating between direct access and different proxy exit IPs.
+The scraper does not rotate proxies and does not accept credentials embedded in the proxy URL.
+
 Validate configuration without starting a browser login:
 
 ```bash
 uv run upwork-scraper --check-config
 ```
+
+Validate the live Upwork login without scraping or changing the jobs database:
+
+```bash
+uv run upwork-scraper --validate-login
+```
+
+This opens the dedicated visible browser profile and waits for any Upwork security verification
+or two-factor authentication. It is a manual integration check and is not part of the automated
+test suite or CI.
 
 
 ## Usage

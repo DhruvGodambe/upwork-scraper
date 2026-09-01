@@ -6,6 +6,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -14,12 +15,35 @@ class ConfigurationError(ValueError):
     """Raised when required runtime configuration is missing or invalid."""
 
 
+def validate_proxy_server(value: str | None) -> str | None:
+    """Validate a Chrome proxy value and normalize host:port shorthand."""
+
+    if not value:
+        return None
+    proxy = value if "://" in value else f"http://{value}"
+    parsed = urlsplit(proxy)
+    if parsed.scheme not in {"http", "https", "socks4", "socks5"} or not parsed.hostname:
+        raise ConfigurationError(
+            "UPWORK_PROXY_SERVER must use http[s], socks4, or socks5 and include a host"
+        )
+    if parsed.username or parsed.password:
+        raise ConfigurationError("UPWORK_PROXY_SERVER must not contain proxy credentials")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ConfigurationError("UPWORK_PROXY_SERVER must contain a valid port") from exc
+    if port is None or not 1 <= port <= 65535:
+        raise ConfigurationError("UPWORK_PROXY_SERVER must contain a port from 1 to 65535")
+    return proxy
+
+
 @dataclass(frozen=True)
 class Settings:
     username: str
     password: str = field(repr=False)
     user_name: str | None = None
     browser_executable_path: str | None = None
+    proxy_server: str | None = None
     driver_cache_dir: Path = Path.home() / ".cache" / "upwork-scraper"
     browser_profile_dir: Path = (
         Path.home() / ".local" / "state" / "upwork-scraper" / "chrome-profile"
@@ -59,6 +83,7 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         password=password,
         user_name=_env("UPWORK_USER_NAME", values),
         browser_executable_path=_env("BROWSER_EXECUTABLE_PATH", values),
+        proxy_server=validate_proxy_server(_env("UPWORK_PROXY_SERVER", values)),
         driver_cache_dir=Path(
             _env("UPWORK_DRIVER_CACHE_DIR", values) or Path.home() / ".cache" / "upwork-scraper"
         ).expanduser(),

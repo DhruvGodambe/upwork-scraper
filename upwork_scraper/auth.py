@@ -5,7 +5,11 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
-from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
+from selenium.common.exceptions import (
+    InvalidSessionIdException,
+    StaleElementReferenceException,
+    TimeoutException,
+)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
@@ -60,12 +64,14 @@ def _click_submit(driver, field) -> None:
 
 
 def _authenticated(driver) -> bool:
-    if "/account-security/login" in driver.current_url:
-        return False
     try:
+        if "/account-security/login" in driver.current_url:
+            return False
         return not any(e.is_displayed() for e in driver.find_elements(By.ID, "login_password"))
     except StaleElementReferenceException:
         return False
+    except InvalidSessionIdException as exc:
+        raise RuntimeError("Chrome closed the browser session during authentication") from exc
 
 
 def _visible_element_by_id(driver, element_id: str):

@@ -81,6 +81,8 @@ def _launch_with_driver(settings: Settings, spec: BrowserSpec, driver_path: Path
     options.headless = False
     options.add_argument("--disable-dev-shm-usage")
     options.user_data_dir = str(settings.browser_profile_dir)
+    if settings.proxy_server:
+        options.add_argument(f"--proxy-server={settings.proxy_server}")
     arguments = {
         "options": options,
         "browser_executable_path": str(spec.executable),
