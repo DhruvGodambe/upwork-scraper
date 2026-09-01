@@ -82,6 +82,17 @@ def _body_text(driver) -> str:
         return ""
 
 
+def _login_warning(text: str) -> str | None:
+    markers = (
+        "technical difficulties",
+        "incorrect",
+        "abnormal behavior",
+        "unusual activity",
+        "suspicious activity",
+    )
+    return next((marker for marker in markers if marker in text), None)
+
+
 def login(driver, settings: Settings, logger: Callable[[str], None]) -> None:
     driver.get(LOGIN_URL)
     _dismiss_cookie_consent(driver)
@@ -104,13 +115,18 @@ def login(driver, settings: Settings, logger: Callable[[str], None]) -> None:
     _click_submit(driver, password)
 
     deadline = time.monotonic() + settings.verification_timeout
+    reported_warning: str | None = None
     while time.monotonic() < deadline:
         if _authenticated(driver):
             driver.get(BEST_MATCHES_URL)
             return
         text = _body_text(driver).lower()
-        if "technical difficulties" in text or "incorrect" in text:
-            logger("Upwork displayed a login error; waiting for manual resolution")
+        warning = _login_warning(text)
+        if warning is not None and warning != reported_warning:
+            logger(
+                f"Upwork displayed a login/security warning ({warning}); waiting for manual resolution"
+            )
+            reported_warning = warning
         time.sleep(1)
     raise TimeoutException(
         f"Authentication did not complete within {settings.verification_timeout} seconds; "
