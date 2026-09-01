@@ -9,6 +9,8 @@ import paths changed.
 
 ### Added
 
+- Manual login support for Google-, Apple-, and two-step verification flows when
+  `UPWORK_PASSWORD` is not configured.
 - Environment-based credential and runtime configuration.
 - Persistent browser profile and optional proxy support.
 - Explicit live login validation command.

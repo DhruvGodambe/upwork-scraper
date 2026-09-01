@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-upwork-scraper = "upwork_scraper.app:main"
+upwork-scraper = "upwork_scraper.app:cli"
 
 [build-system]
 requires = ["setuptools>=69"]

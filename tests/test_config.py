@@ -23,9 +23,18 @@ def test_load_settings_from_environment() -> None:
     assert settings.browser_profile_dir == Path("/tmp/upwork-profile")
 
 
-def test_missing_credentials_fail_without_exposing_values() -> None:
-    with pytest.raises(ConfigurationError, match="UPWORK_USERNAME and UPWORK_PASSWORD"):
+def test_missing_username_fails_without_exposing_values() -> None:
+    with pytest.raises(ConfigurationError, match="UPWORK_USERNAME must be set"):
         load_settings({})
+
+
+def test_password_is_optional_for_provider_login() -> None:
+    settings = load_settings(
+        {"UPWORK_USERNAME": "user@example.com", "UPWORK_FIRST_NAME": "FirstName"}
+    )
+
+    assert settings.username == "user@example.com"
+    assert settings.password is None
 
 
 def test_invalid_timeout_fails() -> None:

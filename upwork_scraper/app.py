@@ -172,3 +172,9 @@ def main(argv: list[str] | None = None) -> bool:
                 logger.warning("Browser was already closed")
         cursor.close()
         conn.close()
+
+
+def cli() -> int:
+    """Run the packaged command with conventional process exit statuses."""
+
+    return 0 if main() else 1

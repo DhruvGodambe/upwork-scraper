@@ -53,6 +53,12 @@ def test_authenticated_requires_leaving_login_page():
     assert _authenticated(authenticated_driver)
 
 
+def test_authenticated_rejects_external_provider_page():
+    provider_driver = FakeDriver("https://accounts.google.com/signin")
+
+    assert not _authenticated(provider_driver)
+
+
 def test_login_warning_detects_security_interstitials():
     assert _login_warning("We detected abnormal behavior") == "abnormal behavior"
     assert _login_warning("The account has unusual activity") == "unusual activity"
