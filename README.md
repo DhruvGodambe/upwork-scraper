@@ -141,6 +141,15 @@ If Upwork reports network restrictions, configure the same stable proxy route th
 your normal browser. Avoid alternating between direct access and different proxy exit IPs.
 The scraper does not rotate proxies and does not accept credentials embedded in the proxy URL.
 
+For example, an SSH SOCKS tunnel can be configured with:
+
+```bash
+ssh -N -D 1080 user@proxy-host
+export UPWORK_PROXY_SERVER=socks5://127.0.0.1:1080
+```
+
+Keep the tunnel and the scraper on the same stable route for the account’s session.
+
 Validate configuration without starting a browser login:
 
 ```bash
@@ -156,6 +165,14 @@ uv run upwork-scraper --validate-login
 This opens the dedicated visible browser profile and waits for any Upwork security verification
 or two-factor authentication. It is a manual integration check and is not part of the automated
 test suite or CI.
+
+The CLI also supports these overrides for one run:
+
+* `--database PATH` changes the SQLite database location.
+* `--browser-path PATH` selects a specific Chrome or Chromium executable.
+* `--proxy-server VALUE` overrides `UPWORK_PROXY_SERVER`.
+* `--verification-timeout SECONDS` changes the manual verification window.
+* `--log-level LEVEL` changes console and file logging verbosity.
 
 
 ## Usage
