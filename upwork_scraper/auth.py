@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
@@ -18,13 +18,37 @@ BEST_MATCHES_URL = "https://www.upwork.com/nx/find-work/best-matches"
 
 def _visible_button(driver):
     for button in driver.find_elements(By.CSS_SELECTOR, "form#login button"):
-        if (
-            button.is_displayed()
-            and button.is_enabled()
-            and button.text.strip() in {"Continue", "Log in", "Sign in"}
-        ):
-            return button
+        try:
+            if (
+                button.is_displayed()
+                and button.is_enabled()
+                and button.text.strip() in {"Continue", "Log in", "Sign in"}
+            ):
+                return button
+        except StaleElementReferenceException:
+            continue
     return None
+
+
+def _dismiss_cookie_consent(driver) -> None:
+    """Dismiss the consent overlay on a fresh automation profile."""
+
+    for _ in range(10):
+        buttons = driver.find_elements(By.TAG_NAME, "button")
+        consent = next(
+            (
+                button
+                for button in buttons
+                if button.is_displayed() and button.text.strip() in {"Reject All", "Accept All"}
+            ),
+            None,
+        )
+        if consent is not None:
+            # The consent controls can be below the viewport and Selenium's
+            # coordinate click can be intercepted by the fixed overlay itself.
+            driver.execute_script("arguments[0].click()", consent)
+            return
+        time.sleep(0.5)
 
 
 def _click_submit(driver, field) -> None:
@@ -38,7 +62,17 @@ def _click_submit(driver, field) -> None:
 def _authenticated(driver) -> bool:
     if "/account-security/login" in driver.current_url:
         return False
-    return not any(e.is_displayed() for e in driver.find_elements(By.ID, "login_password"))
+    try:
+        return not any(e.is_displayed() for e in driver.find_elements(By.ID, "login_password"))
+    except StaleElementReferenceException:
+        return False
+
+
+def _visible_element_by_id(driver, element_id: str):
+    try:
+        return next((e for e in driver.find_elements(By.ID, element_id) if e.is_displayed()), None)
+    except StaleElementReferenceException:
+        return None
 
 
 def _body_text(driver) -> str:
@@ -50,10 +84,9 @@ def _body_text(driver) -> str:
 
 def login(driver, settings: Settings, logger: Callable[[str], None]) -> None:
     driver.get(LOGIN_URL)
+    _dismiss_cookie_consent(driver)
     username = WebDriverWait(driver, 30).until(
-        lambda d: next(
-            (e for e in d.find_elements(By.ID, "login_username") if e.is_displayed()), None
-        )
+        lambda d: _visible_element_by_id(d, "login_username")
     )
     username.clear()
     username.send_keys(settings.username)
@@ -61,9 +94,7 @@ def login(driver, settings: Settings, logger: Callable[[str], None]) -> None:
 
     try:
         password = WebDriverWait(driver, 30).until(
-            lambda d: next(
-                (e for e in d.find_elements(By.ID, "login_password") if e.is_displayed()), None
-            )
+            lambda d: _visible_element_by_id(d, "login_password")
         )
     except TimeoutException as exc:
         raise RuntimeError(f"Username step did not advance; page: {driver.current_url}") from exc

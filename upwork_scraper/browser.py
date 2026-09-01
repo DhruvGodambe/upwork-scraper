@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,15 +57,57 @@ def discover_browser(explicit_path: str | None = None) -> BrowserSpec:
     raise BrowserError("No supported browser found; install Chrome or Chromium")
 
 
-def launch_driver(settings: Settings):
-    spec = discover_browser(settings.browser_executable_path)
+def _cached_driver_path(spec: BrowserSpec, cache_dir: Path) -> Path:
+    return cache_dir / f"undetected-chromedriver-{spec.major_version}"
+
+
+def _cache_driver(driver, destination: Path) -> None:
+    source = Path(driver.patcher.executable_path)
+    if not source.is_file():
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="wb", dir=destination.parent, prefix=f".{destination.name}.", delete=False
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+        with source.open("rb") as original:
+            shutil.copyfileobj(original, temporary)
+    temporary_path.chmod(0o755)
+    temporary_path.replace(destination)
+
+
+def _launch_with_driver(settings: Settings, spec: BrowserSpec, driver_path: Path | None = None):
     options = uc.ChromeOptions()
     options.headless = False
     options.add_argument("--disable-dev-shm-usage")
-    driver = uc.Chrome(
-        options=options,
-        browser_executable_path=str(spec.executable),
-        version_main=spec.major_version,
-        use_subprocess=True,
-    )
+    arguments = {
+        "options": options,
+        "browser_executable_path": str(spec.executable),
+        "version_main": spec.major_version,
+        "use_subprocess": True,
+    }
+    if driver_path is not None:
+        arguments["driver_executable_path"] = str(driver_path)
+    return uc.Chrome(**arguments)
+
+
+def launch_driver(settings: Settings):
+    spec = discover_browser(settings.browser_executable_path)
+    cached_driver = _cached_driver_path(spec, settings.driver_cache_dir)
+    if cached_driver.is_file():
+        try:
+            return _launch_with_driver(settings, spec, cached_driver), spec
+        except Exception:
+            # Keep the last known-good file. A fresh attempt may recover from a
+            # stale driver, while a failed refresh must never erase the cache.
+            pass
+
+    try:
+        driver = _launch_with_driver(settings, spec)
+    except Exception as exc:
+        raise BrowserError(
+            f"Could not start ChromeDriver for browser major version {spec.major_version}. "
+            "No usable cached driver was available; network access may be required for first setup."
+        ) from exc
+    _cache_driver(driver, cached_driver)
     return driver, spec

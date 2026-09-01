@@ -32,9 +32,7 @@ def _logger(level: str) -> logging.Logger:
         log_dir = Path(__file__).resolve().parents[1] / "log"
         log_dir.mkdir(exist_ok=True)
         file_handler = logging.FileHandler(log_dir / "upwork_best_matches_scraper.log")
-        file_handler.setFormatter(
-            logging.Formatter("[%(levelname)s] %(asctime)s %(message)s")
-        )
+        file_handler.setFormatter(logging.Formatter("[%(levelname)s] %(asctime)s %(message)s"))
         logger.addHandler(file_handler)
     return logger
 
