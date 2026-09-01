@@ -126,7 +126,8 @@ UPWORK_PASSWORD=replace-me
 
 **Configuration**
 * `UPWORK_USERNAME` and `UPWORK_PASSWORD` are required.
-* `UPWORK_USER_NAME` is optional and can contain the first name shown in the Upwork profile panel.
+* `UPWORK_USER_NAME` is required and must contain the first name shown in the Upwork profile panel.
+  The current scraper uses it to isolate the job-results text before parsing.
 * `BROWSER_EXECUTABLE_PATH` is optional. Without it, Google Chrome is preferred and Chromium is used as a fallback.
 * `UPWORK_PROXY_SERVER` is optional and accepts `http[s]://host:port`, `socks4://host:port`,
   `socks5://host:port`, or `host:port` (HTTP shorthand).

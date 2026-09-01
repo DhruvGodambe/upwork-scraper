@@ -41,7 +41,7 @@ def validate_proxy_server(value: str | None) -> str | None:
 class Settings:
     username: str
     password: str = field(repr=False)
-    user_name: str | None = None
+    user_name: str
     browser_executable_path: str | None = None
     proxy_server: str | None = None
     driver_cache_dir: Path = Path.home() / ".cache" / "upwork-scraper"
@@ -65,10 +65,13 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     values = os.environ if environ is None else environ
     username = _env("UPWORK_USERNAME", values)
     password = _env("UPWORK_PASSWORD", values)
+    user_name = _env("UPWORK_USER_NAME", values)
     if not username or not password:
         raise ConfigurationError(
             "UPWORK_USERNAME and UPWORK_PASSWORD must be set in the environment or .env"
         )
+    if not user_name:
+        raise ConfigurationError("UPWORK_USER_NAME must be set in the environment or .env")
 
     timeout_text = _env("UPWORK_VERIFICATION_TIMEOUT", values) or "120"
     try:
@@ -81,7 +84,7 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     return Settings(
         username=username,
         password=password,
-        user_name=_env("UPWORK_USER_NAME", values),
+        user_name=user_name,
         browser_executable_path=_env("BROWSER_EXECUTABLE_PATH", values),
         proxy_server=validate_proxy_server(_env("UPWORK_PROXY_SERVER", values)),
         driver_cache_dir=Path(

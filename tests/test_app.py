@@ -25,7 +25,7 @@ class FakeDriver:
 
 
 def test_validate_login_does_not_open_database(monkeypatch):
-    settings = Settings(username="user@example.com", password="secret")
+    settings = Settings(username="user@example.com", password="secret", user_name="FirstName")
     driver = FakeDriver()
 
     monkeypatch.setattr(app, "load_settings", lambda: settings)

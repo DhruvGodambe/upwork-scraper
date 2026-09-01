@@ -42,6 +42,7 @@ def test_launch_passes_profile_and_proxy_to_chrome(monkeypatch, tmp_path) -> Non
     settings = Settings(
         username="user@example.com",
         password="secret",
+        user_name="FirstName",
         proxy_server="socks5://127.0.0.1:1080",
         browser_profile_dir=tmp_path / "profile",
     )
