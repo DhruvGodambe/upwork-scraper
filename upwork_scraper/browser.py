@@ -80,6 +80,7 @@ def _launch_with_driver(settings: Settings, spec: BrowserSpec, driver_path: Path
     options = uc.ChromeOptions()
     options.headless = False
     options.add_argument("--disable-dev-shm-usage")
+    options.user_data_dir = str(settings.browser_profile_dir)
     arguments = {
         "options": options,
         "browser_executable_path": str(spec.executable),

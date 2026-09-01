@@ -127,7 +127,11 @@ UPWORK_PASSWORD=replace-me
 * `UPWORK_USERNAME` and `UPWORK_PASSWORD` are required.
 * `UPWORK_USER_NAME` is optional and can contain the first name shown in the Upwork profile panel.
 * `BROWSER_EXECUTABLE_PATH` is optional. Without it, Google Chrome is preferred and Chromium is used as a fallback.
-* `UPWORK_DATABASE_PATH`, `UPWORK_VERIFICATION_TIMEOUT`, and `LOG_LEVEL` are optional.
+* `UPWORK_DATABASE_PATH`, `UPWORK_DRIVER_CACHE_DIR`, `UPWORK_BROWSER_PROFILE_DIR`,
+  `UPWORK_VERIFICATION_TIMEOUT`, and `LOG_LEVEL` are optional.
+* The browser profile is persistent by default, so cookies and completed Upwork
+  verification can be reused on later runs. Do not use the profile directory
+  concurrently from multiple scraper processes.
 
 The browser major version is detected automatically. Users should not normally maintain a Chrome version list.
 
