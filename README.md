@@ -66,6 +66,27 @@ The legacy command remains supported:
 uv run python upwork_best_matches_scraper.py
 ```
 
+### Install local commit checks
+
+Install the pre-commit hooks once per clone:
+
+```bash
+pre-commit install
+```
+
+The hooks run Ruff and Gitleaks before each commit. Gitleaks scans staged changes for
+credentials and other secrets. Install Gitleaks separately and ensure it is available on
+your `PATH`; the project pins the hook definition to Gitleaks `v8.30.1`.
+
+To run all hooks manually:
+
+```bash
+pre-commit run --all-files
+```
+
+If Gitleaks reports a real secret, stop and rotate it before committing. Do not bypass the
+hook unless the finding has been reviewed and is demonstrably a false positive.
+
 ## Installation with pip
 
 1. **Create Virtual Environment:** It's recommended to create a virtual environment to isolate the dependencies of this project. You can create a virtual environment with Python 3.11 using the following command:
