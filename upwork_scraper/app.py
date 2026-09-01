@@ -14,12 +14,11 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from utils.database import connect_to_db, create_db
-from utils.job_helpers import parse_job_details
-
 from .auth import login
 from .browser import discover_browser, launch_driver
 from .config import ConfigurationError, load_settings, validate_proxy_server
+from .database import connect_to_db, create_db
+from .job_helpers import parse_job_details
 
 
 def _logger(level: str) -> logging.Logger:

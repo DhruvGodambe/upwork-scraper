@@ -18,7 +18,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["upwork_scraper*", "utils*"]
+include = ["upwork_scraper*"]
 
 [dependency-groups]
 dev = [

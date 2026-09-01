@@ -62,6 +62,14 @@ Run the scraper with:
 uv run upwork-scraper
 ```
 
+The Makefile provides equivalent shortcuts for common development commands:
+
+```bash
+make install       # synchronize the locked uv environment
+make check         # run tests, lint, formatting, and type checks
+make validate      # validate local configuration and browser discovery
+```
+
 The legacy command remains supported:
 
 ```bash
