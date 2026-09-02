@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from argparse import ArgumentParser
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +20,25 @@ from .browser import discover_browser, launch_driver
 from .config import ConfigurationError, load_settings, validate_proxy_server
 from .database import connect_to_db, create_db
 from .job_helpers import parse_job_details
+
+SCROLL_STEPS = 12
+SCROLL_PAUSE_SECONDS = 0.5
+JOB_COUNT_STABLE_POLLS = 3
+JOB_COUNT_STABLE_TIMEOUT = 30
+
+
+@dataclass(frozen=True)
+class ScrapeCounts:
+    """Database outcomes for one scrape run."""
+
+    inserted: int = 0
+    updated: int = 0
+    failed: int = 0
+    skipped: int = 0
+
+    @property
+    def processed(self) -> int:
+        return self.inserted + self.updated + self.failed
 
 
 def _logger(level: str) -> logging.Logger:
@@ -50,6 +70,105 @@ def _arguments(argv: list[str] | None):
     parser.add_argument("--verification-timeout", type=int)
     parser.add_argument("--log-level")
     return parser.parse_args(argv)
+
+
+def _job_urls(driver) -> list[str]:
+    hrefs = driver.execute_script(
+        "return Array.from(document.querySelectorAll(\"a[href*='/jobs/']\"), link => link.href);"
+    )
+    return [href.split("?", 1)[0].rstrip("/") for href in hrefs if "ontology_skill_uid" not in href]
+
+
+def _load_job_list(driver, logger: logging.Logger) -> None:
+    """Scroll through results and wait briefly for lazy-loaded jobs to settle."""
+
+    body = driver.find_element(By.TAG_NAME, "body")
+    for step in range(1, SCROLL_STEPS + 1):
+        body.send_keys(Keys.PAGE_DOWN)
+        time.sleep(SCROLL_PAUSE_SECONDS)
+        logger.info(
+            "Loading jobs: scroll %d/%d; %d job links visible",
+            step,
+            SCROLL_STEPS,
+            len(_job_urls(driver)),
+        )
+
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    WebDriverWait(driver, 120).until(EC.visibility_of_element_located((By.TAG_NAME, "footer")))
+
+    previous_count = -1
+    stable_polls = 0
+
+    def stable_job_count(current_driver) -> bool:
+        nonlocal previous_count, stable_polls
+        current_count = len(_job_urls(current_driver))
+        if current_count == previous_count:
+            stable_polls += 1
+        else:
+            previous_count = current_count
+            stable_polls = 1
+        return stable_polls >= JOB_COUNT_STABLE_POLLS
+
+    WebDriverWait(driver, JOB_COUNT_STABLE_TIMEOUT, poll_frequency=1).until(stable_job_count)
+    logger.info("Job list loaded: %d job links visible", previous_count)
+
+
+def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, logger) -> ScrapeCounts:
+    """Parse and persist posts, retaining progress when one post fails."""
+
+    if len(job_posts) != len(job_urls):
+        logger.warning(
+            "Job result mismatch: %d parsed posts and %d job links; processing %d pairs",
+            len(job_posts),
+            len(job_urls),
+            min(len(job_posts), len(job_urls)),
+        )
+
+    inserted = 0
+    updated = 0
+    failed = 0
+    skipped = max(0, len(job_posts) - len(job_urls))
+    processable = min(len(job_posts), len(job_urls))
+    for index in range(processable):
+        post = job_posts[index]
+        try:
+            details = parse_job_details(post.split("\n"), job_url=job_urls[index])
+            cursor.execute("SELECT COUNT(*) FROM jobs WHERE job_id = ?", (details["job_id"],))
+            if cursor.fetchone()[0]:
+                cursor.execute(
+                    "UPDATE jobs SET job_proposals = ?, updated_at = ? WHERE job_id = ?",
+                    (details["job_proposals"], datetime.now(), details["job_id"]),
+                )
+                updated += 1
+            else:
+                cursor.execute(
+                    "INSERT INTO jobs (job_id, job_url, job_title, posted_date, "
+                    "job_description, job_tags, job_proposals) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        details["job_id"],
+                        job_urls[index],
+                        details["job_title"],
+                        details["posted_date"],
+                        details["job_description"],
+                        details["job_tags"],
+                        details["job_proposals"],
+                    ),
+                )
+                inserted += 1
+        except Exception as exc:
+            failed += 1
+            logger.warning("Job %d/%d failed: %s", index + 1, processable, exc)
+        if (index + 1) % 5 == 0 or index + 1 == processable:
+            logger.info(
+                "Processed %d/%d jobs (%d inserted, %d updated, %d failed)",
+                index + 1,
+                len(job_posts),
+                inserted,
+                updated,
+                failed,
+            )
+    return ScrapeCounts(inserted, updated, failed, skipped)
 
 
 def main(argv: list[str] | None = None) -> bool:
@@ -110,11 +229,7 @@ def main(argv: list[str] | None = None) -> bool:
         logger.info("Logging in to Upwork")
         login(driver, settings, lambda message: logger.warning(message))
 
-        body = driver.find_element(By.TAG_NAME, "body")
-        for _ in range(12):
-            body.send_keys(Keys.PAGE_DOWN)
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        WebDriverWait(driver, 120).until(EC.visibility_of_element_located((By.TAG_NAME, "footer")))
+        _load_job_list(driver, logger)
 
         jobs_container = WebDriverWait(driver, 30).until(
             EC.presence_of_all_elements_located(
@@ -126,40 +241,19 @@ def main(argv: list[str] | None = None) -> bool:
             text = text.split(settings.first_name)[0]
         text = text.split("Ordered by most relevant.")[-1]
         job_posts = text.split("Posted")[1:]
-        job_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/jobs/')]")
-        job_urls = [
-            link.get_attribute("href").split("/?")[0]
-            for link in job_links
-            if link.get_attribute("href") and "ontology_skill_uid" not in link.get_attribute("href")
-        ]
-        for index, post in enumerate(job_posts):
-            if index >= len(job_urls):
-                break
-            details = parse_job_details(post.split("\n"), job_url=job_urls[index])
-            cursor.execute("SELECT COUNT(*) FROM jobs WHERE job_id = ?", (details["job_id"],))
-            if cursor.fetchone()[0]:
-                cursor.execute(
-                    "UPDATE jobs SET job_proposals = ?, updated_at = ? WHERE job_id = ?",
-                    (details["job_proposals"], datetime.now(), details["job_id"]),
-                )
-            else:
-                cursor.execute(
-                    "INSERT INTO jobs (job_id, job_url, job_title, posted_date, job_description, "
-                    "job_tags, job_proposals) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        details["job_id"],
-                        job_urls[index],
-                        details["job_title"],
-                        details["posted_date"],
-                        details["job_description"],
-                        details["job_tags"],
-                        details["job_proposals"],
-                    ),
-                )
+        job_urls = _job_urls(driver)
+        logger.info("Parsed %d job posts and found %d job links", len(job_posts), len(job_urls))
+        counts = _process_jobs(job_posts, job_urls, cursor, logger)
         conn.commit()
-        processed = min(len(job_posts), len(job_urls))
-        logger.info("Scraping completed: %d job posts processed", processed)
+        logger.info(
+            "Scraping completed: %d job posts processed (%d inserted, %d updated, "
+            "%d failed, %d skipped); database commit succeeded",
+            counts.processed,
+            counts.inserted,
+            counts.updated,
+            counts.failed,
+            counts.skipped,
+        )
         return True
     except Exception:
         logger.exception("Scraping failed")
