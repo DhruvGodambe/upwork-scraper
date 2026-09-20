@@ -1,0 +1,58 @@
+{
+  "clientHistory": ["noHires", "1to9Hires", "10+Hires"],
+  "experienceLevel": ["entry", "intermediate", "expert"],
+  "jobType": ["fixed", "hourly"],
+  "maxJobAge": {
+    "value": 24,
+    "unit": "hours"
+  },
+  "paymentVerified": false,
+  "query": "blockchain",
+  "proposals": {
+    "min": 1,
+    "max": 20
+  },
+  "skillsAndExpertise": {
+    "matchAtLeast": 1,
+    "anyOf": [
+      "Blockchain",
+      "Web3",
+      "ERC-1155",
+      "ERC-777",
+      "TRC",
+      "Blockchain Development Framework",
+      "Blockchain Architecture",
+      "Solidity",
+      "Smart Contract",
+      "Solana",
+      "Anchor",
+      "Rust",
+      "TypeScript",
+      "Node.js",
+      "Next.js",
+      "API Development",
+      "Backend",
+      "CI/CD",
+      "Web Application",
+      "Front-End Development Framework",
+      "NFT",
+      "Cryptocurrency",
+      "Bitcoin",
+      "HTML Game",
+      "Phaser"
+    ]
+  },
+  "excludeClientCountries": [
+    "Philippines",
+    "Pakistan",
+    "Nigeria",
+    "Bangladesh",
+    "Sri Lanka",
+    "Any African country"
+  ],
+  "output": {
+    "fields": ["title", "link", "proposalCount", "matchedSkills", "clientCountry"],
+    "ifMissing": "mark as unknown and include the job, don't guess"
+  },
+  "rules": ["Do not apply or send anything. Only list results."]
+}

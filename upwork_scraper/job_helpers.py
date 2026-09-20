@@ -8,6 +8,113 @@ import re
 from datetime import datetime, timedelta
 from urllib.parse import unquote
 
+SEARCH_KEYWORDS: list[str] = [
+    "solidity",
+    "rust blockchain",
+    "smart contract developer",
+    "web3 developer",
+    "defi developer",
+    "ethereum developer",
+    "solana developer",
+    "trading bot crypto",
+    "mev bot",
+    "nft smart contract",
+    "blockchain developer",
+    "evm developer",
+]
+
+
+def build_search_url(query: str, page: int = 1) -> str:
+    """Return an Upwork job-search URL for ``query``, sorted by recency."""
+    from urllib.parse import urlencode
+    params: dict = {"q": query, "sort": "recency"}
+    if page > 1:
+        params["page"] = page
+    return "https://www.upwork.com/nx/search/jobs?" + urlencode(params)
+
+
+BLOCKCHAIN_KEYWORDS: list[str] = [
+    # Languages
+    "rust",
+    "solidity",
+    # Blockchain / Web3 core
+    "blockchain",
+    "smart contract",
+    "web3",
+    "web 3",
+    "defi",
+    "decentralized",
+    "dapp",
+    "nft",
+    "ethereum",
+    "solana",
+    "polkadot",
+    "substrate",
+    "cosmos",
+    "avalanche",
+    "cardano",
+    "ton ",
+    "near protocol",
+    "layer 2",
+    "layer2",
+    "evm",
+    "erc-20",
+    "erc20",
+    "erc-721",
+    "erc721",
+    "hardhat",
+    "foundry",
+    "anchor",
+    "ethers.js",
+    "ethers",
+    "web3.js",
+    "wagmi",
+    "viem",
+    "alchemy",
+    "infura",
+    "ipfs",
+    "chainlink",
+    "uniswap",
+    "aave",
+    "openzeppelin",
+    # Crypto / trading bots
+    "trading bot",
+    "arbitrage",
+    "mev",
+    "sniper bot",
+    "flash loan",
+    "crypto bot",
+    "dex",
+    "liquidity",
+    "yield farming",
+    "staking",
+    "mempool",
+    "wallet",
+    "cryptocurrency",
+    "crypto",
+    "token",
+    "coin",
+    "btc",
+    "bitcoin",
+    "exchange",
+    # Bots (general, user explicitly requested)
+    "bot",
+    "automation bot",
+    # JS/TS (user explicitly requested)
+    "javascript",
+    "typescript",
+    "node.js",
+    "nodejs",
+    "react",
+    "reactjs"
+]
+
+
+def is_relevant_job(title: str, description: str, tags: list[str]) -> bool:
+    """Return True if the job matches any blockchain/relevant keyword."""
+    haystack = " ".join([title, description, *tags]).lower()
+    return any(kw in haystack for kw in BLOCKCHAIN_KEYWORDS)
+
 
 def extract_job_id_from_url(url: str | None) -> str | None:
     """Extract the Upwork job cipher from a job URL."""
@@ -109,6 +216,30 @@ def clean_skills(skills: list[str]) -> list[str]:
     return cleaned
 
 
+_KNOWN_COUNTRIES = {
+    "united states", "united kingdom", "canada", "australia", "germany",
+    "france", "netherlands", "sweden", "norway", "denmark", "finland",
+    "switzerland", "austria", "belgium", "italy", "spain", "portugal",
+    "ireland", "new zealand", "singapore", "japan", "south korea",
+    "israel", "uae", "united arab emirates", "saudi arabia", "qatar",
+    "hong kong", "taiwan", "india", "china", "brazil", "mexico",
+    "argentina", "colombia", "chile", "peru", "ukraine", "poland",
+    "czech republic", "romania", "hungary", "bulgaria", "croatia",
+    "turkey", "russia", "egypt", "south africa", "nigeria", "kenya",
+    "ghana", "philippines", "pakistan", "bangladesh", "sri lanka",
+    "indonesia", "malaysia", "vietnam", "thailand",
+}
+
+
+def extract_client_country(rows: list[str]) -> str:
+    """Return the client country from job card rows, or empty string if not found."""
+    for row in rows:
+        val = row.strip().lower()
+        if val in _KNOWN_COUNTRIES:
+            return row.strip()
+    return ""
+
+
 def parse_job_details(rows: list[str], job_url: str | None = None) -> dict:
     """Parse one job card represented as a list of visible text lines."""
 
@@ -195,4 +326,5 @@ def parse_job_details(rows: list[str], job_url: str | None = None) -> dict:
         "job_proposals": clean_job_proposals(proposals_text),
         "job_tags": json.dumps(clean_skills(job_tags)),
         "job_id": generate_job_id(title, job_url, description),
+        "client_country": extract_client_country(rows),
     }

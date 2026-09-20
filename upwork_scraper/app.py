@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import time
@@ -10,15 +11,17 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from .auth import login
+from .auth import BEST_MATCHES_URL, login
 from .browser import discover_browser, launch_driver
-from .config import ConfigurationError, load_settings, validate_proxy_server
+from .config import ConfigurationError, Settings, load_settings, validate_proxy_server
 from .database import connect_to_db, create_db
-from .job_helpers import parse_job_details
+from .filter import FilterConfig, apply_filter, print_results
+from .job_helpers import SEARCH_KEYWORDS, build_search_url, is_relevant_job, parse_job_details
 
 SCROLL_STEPS = 12
 SCROLL_PAUSE_SECONDS = 0.5
@@ -39,6 +42,15 @@ class ScrapeCounts:
     @property
     def processed(self) -> int:
         return self.inserted + self.updated + self.unchanged + self.failed
+
+    def __add__(self, other: "ScrapeCounts") -> "ScrapeCounts":
+        return ScrapeCounts(
+            inserted=self.inserted + other.inserted,
+            updated=self.updated + other.updated,
+            unchanged=self.unchanged + other.unchanged,
+            failed=self.failed + other.failed,
+            skipped=self.skipped + other.skipped,
+        )
 
 
 def _logger(level: str) -> logging.Logger:
@@ -147,7 +159,10 @@ def _load_job_list(driver, logger: logging.Logger) -> None:
     logger.info("Job list loaded: %d job links visible", previous_count)
 
 
-def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, logger) -> ScrapeCounts:
+PERIODIC_COMMIT_EVERY = 25
+
+
+def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, conn, logger) -> ScrapeCounts:
     """Parse and persist posts, retaining progress when one post fails."""
 
     if len(job_posts) != len(job_urls):
@@ -162,30 +177,38 @@ def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, logger) -> 
     updated = 0
     unchanged = 0
     failed = 0
-    skipped = max(0, len(job_posts) - len(job_urls))
+    skipped = max(0, len(job_posts) - len(job_urls))  # mismatch + filtered
     processable = min(len(job_posts), len(job_urls))
     for index in range(processable):
         post = job_posts[index]
         try:
             details = parse_job_details(post.split("\n"), job_url=job_urls[index])
+            tags: list[str] = json.loads(details.get("job_tags") or "[]")
+            if not is_relevant_job(details["job_title"], details["job_description"], tags):
+                skipped += 1
+                logger.debug("Skipped irrelevant job: %s", details["job_title"])
+                continue
             cursor.execute("SELECT job_proposals FROM jobs WHERE job_id = ?", (details["job_id"],))
             existing = cursor.fetchone()
             if existing is not None:
                 stored_proposals = existing[0] or ""
                 scraped_proposals = details["job_proposals"] or ""
+                new_country = details.get("client_country", "")
+                # Always update country; also update proposals if changed
+                cursor.execute(
+                    "UPDATE jobs SET job_proposals = ?, client_country = ?, updated_at = ? WHERE job_id = ?",
+                    (scraped_proposals, new_country, datetime.now(), details["job_id"]),
+                )
                 if stored_proposals == scraped_proposals:
                     unchanged += 1
-                    continue
-                cursor.execute(
-                    "UPDATE jobs SET job_proposals = ?, updated_at = ? WHERE job_id = ?",
-                    (details["job_proposals"], datetime.now(), details["job_id"]),
-                )
-                updated += 1
+                else:
+                    updated += 1
+                continue
             else:
                 cursor.execute(
                     "INSERT INTO jobs (job_id, job_url, job_title, posted_date, "
-                    "job_description, job_tags, job_proposals) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "job_description, job_tags, job_proposals, client_country) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         details["job_id"],
                         job_urls[index],
@@ -194,6 +217,7 @@ def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, logger) -> 
                         details["job_description"],
                         details["job_tags"],
                         details["job_proposals"],
+                        details.get("client_country", ""),
                     ),
                 )
                 inserted += 1
@@ -210,7 +234,56 @@ def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, logger) -> 
                 unchanged,
                 failed,
             )
+        if (inserted + updated) > 0 and (inserted + updated) % PERIODIC_COMMIT_EVERY == 0:
+            conn.commit()
+            logger.info("Periodic commit: %d jobs saved so far", inserted + updated)
     return ScrapeCounts(inserted, updated, unchanged, failed, skipped)
+
+
+def _scrape_feed(
+    driver, url: str, settings: Settings, cursor, conn, logger: logging.Logger
+) -> ScrapeCounts:
+    """Navigate to ``url``, scroll the job feed, and persist matching jobs.
+
+    Any exception (including a ChromeDriver connection timeout after a long
+    session) is caught here so one failed feed skips rather than crashing
+    the entire run.
+    """
+    logger.info("Scraping feed: %s", url)
+    try:
+        driver.get(url)
+
+        try:
+            WebDriverWait(driver, 30).until(lambda d: len(_job_urls(d)) > 0)
+        except TimeoutException:
+            logger.warning("No job links found at %s — skipping", url)
+            return ScrapeCounts()
+
+        _load_job_list(driver, logger)
+
+        try:
+            containers = WebDriverWait(driver, 30).until(
+                EC.presence_of_all_elements_located((By.XPATH, "//main/div"))
+            )
+        except TimeoutException:
+            logger.warning("Could not locate job container at %s — skipping", url)
+            return ScrapeCounts()
+
+        text = containers[-1].text
+        if settings.first_name and settings.first_name in text:
+            text = text.split(settings.first_name)[0]
+        for marker in ("Ordered by most relevant.", "Ordered by newest.", "Ordered by"):
+            if marker in text:
+                text = text.split(marker, 1)[-1]
+                break
+        job_posts = text.split("Posted")[1:]
+        job_urls = _job_urls(driver)
+        logger.info("Parsed %d job posts and found %d job links", len(job_posts), len(job_urls))
+        return _process_jobs(job_posts, job_urls, cursor, conn, logger)
+
+    except Exception as exc:
+        logger.warning("Feed %s failed (%s: %s) — skipping", url, type(exc).__name__, exc)
+        return ScrapeCounts()
 
 
 def main(argv: list[str] | None = None) -> bool:
@@ -272,33 +345,52 @@ def main(argv: list[str] | None = None) -> bool:
         login(driver, settings, lambda message: logger.warning(message))
         logger.info("Upwork authentication ready")
 
-        _load_job_list(driver, logger)
+        search_queries = settings.search_queries if settings.search_queries else SEARCH_KEYWORDS
+        feed_urls = [BEST_MATCHES_URL] + [
+            build_search_url(q, page=p)
+            for q in search_queries
+            for p in range(1, settings.search_pages + 1)
+        ]
+        logger.info(
+            "Running %d feed(s): Best Matches + %d keyword search(es) × %d page(s)",
+            len(feed_urls),
+            len(search_queries),
+            settings.search_pages,
+        )
 
-        jobs_container = WebDriverWait(driver, 30).until(
-            EC.presence_of_all_elements_located((By.XPATH, "//main/div"))
-        )[-1]
-        text = jobs_container.text
-        if settings.first_name:
-            text = text.split(settings.first_name)[0]
-        text = text.split("Ordered by most relevant.")[-1]
-        job_posts = text.split("Posted")[1:]
-        job_urls = _job_urls(driver)
-        logger.info("Parsed %d job posts and found %d job links", len(job_posts), len(job_urls))
-        counts = _process_jobs(job_posts, job_urls, cursor, logger)
+        total = ScrapeCounts()
+        for feed_url in feed_urls:
+            total = total + _scrape_feed(driver, feed_url, settings, cursor, conn, logger)
+            time.sleep(1)
+
         conn.commit()
         logger.info(
-            "Scraping completed: %d job posts processed (%d inserted, %d updated, "
-            "%d unchanged, %d failed, %d skipped); database commit succeeded",
-            counts.processed,
-            counts.inserted,
-            counts.updated,
-            counts.unchanged,
-            counts.failed,
-            counts.skipped,
+            "All feeds complete: %d inserted, %d updated, %d unchanged, %d failed, "
+            "%d skipped; database commit succeeded",
+            total.inserted,
+            total.updated,
+            total.unchanged,
+            total.failed,
+            total.skipped,
         )
+
+        filter_cfg_path = Path(__file__).resolve().parents[1] / "filter_config.json"
+        if filter_cfg_path.is_file():
+            try:
+                cfg = FilterConfig.from_file(filter_cfg_path)
+                results = apply_filter(conn, cfg)
+                print_results(results)
+            except Exception as exc:
+                logger.warning("Filter step failed: %s", exc)
+
         return True
     except Exception:
         logger.exception("Scraping failed")
+        try:
+            conn.commit()
+            logger.info("Partial work committed to database before exit")
+        except Exception:
+            pass
         return False
     finally:
         if driver is not None:

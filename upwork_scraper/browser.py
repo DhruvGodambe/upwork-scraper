@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +31,34 @@ class BrowserSpec:
 
 
 def _version(executable: Path) -> str:
+    # On Windows, chrome.exe --version opens the browser rather than printing to stdout.
+    # Read the version from file metadata instead.
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            fvi = ctypes.windll.version.GetFileVersionInfoSizeW(str(executable), None)
+            if fvi:
+                buf = ctypes.create_string_buffer(fvi)
+                ctypes.windll.version.GetFileVersionInfoW(str(executable), None, fvi, buf)
+                ver_ptr = ctypes.c_void_p()
+                ver_len = ctypes.c_uint()
+                ctypes.windll.version.VerQueryValueW(
+                    buf, r"\StringFileInfo\040904B0\ProductVersion",
+                    ctypes.byref(ver_ptr), ctypes.byref(ver_len)
+                )
+                version_str = ctypes.wstring_at(ver_ptr.value, ver_len.value - 1)
+                match = re.search(r"(\d+(?:\.\d+){2,3})", version_str)
+                if match:
+                    return match.group(1)
+        except Exception:
+            pass
+        # Fallback: version subdirectory name inside the Application folder
+        app_dir = executable.parent
+        for entry in app_dir.iterdir():
+            if entry.is_dir() and re.match(r"\d+\.\d+\.\d+", entry.name):
+                return entry.name
+        raise BrowserError(f"Could not determine browser version from {executable}")
+
     result = subprocess.run(
         [str(executable), "--version"], capture_output=True, text=True, check=False
     )
@@ -54,6 +84,21 @@ def discover_browser(explicit_path: str | None = None) -> BrowserSpec:
             # would turn the browser path into /usr/bin/snap.
             executable = Path(path)
             return BrowserSpec(executable, _version(executable))
+
+    # On Windows, Chrome is typically installed outside PATH.
+    if sys.platform == "win32":
+        win_candidates = [
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+            / "Google" / "Chrome" / "Application" / "chrome.exe",
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+            / "Google" / "Chrome" / "Application" / "chrome.exe",
+            Path(os.environ.get("LOCALAPPDATA", ""))
+            / "Google" / "Chrome" / "Application" / "chrome.exe",
+        ]
+        for candidate_path in win_candidates:
+            if candidate_path.is_file():
+                return BrowserSpec(candidate_path, _version(candidate_path))
+
     raise BrowserError("No supported browser found; install Chrome or Chromium")
 
 

@@ -51,6 +51,8 @@ class Settings:
     database_path: Path = Path("upwork_jobs.db")
     verification_timeout: int = 120
     log_level: str = "INFO"
+    search_queries: list[str] = field(default_factory=list)
+    search_pages: int = 5
 
 
 def _env(name: str, environ: Mapping[str, str]) -> str | None:
@@ -79,6 +81,19 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     if verification_timeout <= 0:
         raise ConfigurationError("UPWORK_VERIFICATION_TIMEOUT must be greater than zero")
 
+    queries_raw = _env("UPWORK_SEARCH_QUERIES", values)
+    search_queries = (
+        [q.strip() for q in queries_raw.split(",") if q.strip()] if queries_raw else []
+    )
+
+    pages_text = _env("UPWORK_SEARCH_PAGES", values) or "5"
+    try:
+        search_pages = int(pages_text)
+    except ValueError as exc:
+        raise ConfigurationError("UPWORK_SEARCH_PAGES must be an integer") from exc
+    if search_pages < 1:
+        raise ConfigurationError("UPWORK_SEARCH_PAGES must be at least 1")
+
     return Settings(
         username=username,
         password=password,
@@ -95,4 +110,6 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         database_path=Path(_env("UPWORK_DATABASE_PATH", values) or "upwork_jobs.db"),
         verification_timeout=verification_timeout,
         log_level=(_env("LOG_LEVEL", values) or "INFO").upper(),
+        search_queries=search_queries,
+        search_pages=search_pages,
     )

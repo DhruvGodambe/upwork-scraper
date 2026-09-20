@@ -30,8 +30,13 @@ def create_db(conn: sqlite3.Connection, cursor: sqlite3.Cursor) -> None:
             job_description TEXT NOT NULL,
             job_tags TEXT,
             job_proposals TEXT,
+            client_country TEXT,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
+    # Add client_country to existing databases that predate this column
+    existing = [r[1] for r in cursor.execute("PRAGMA table_info(jobs)").fetchall()]
+    if "client_country" not in existing:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN client_country TEXT")
     conn.commit()
