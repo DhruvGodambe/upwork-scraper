@@ -1,107 +1,114 @@
-<h1 align="center">Upwork Scraper</h1>
-<h2 align="center">Python + Selenium + SQLite — Blockchain Job Hunter</h2>
+# upwork-scraper
+
+A personal job-hunting bot for blockchain/Web3 developers. Logs into Upwork, trawls through Best Matches and keyword-based search results across multiple pages, and drops everything into a local SQLite database. After each run it scores the haul against your personal filter rules and surfaces the gigs worth your time.
 
 ---
 
-Upwork Scraper performs authenticated scraping of Upwork job listings across multiple feeds and pages, filters results by relevance, and stores everything in a local SQLite database. Built for blockchain/Web3 developers looking for Solidity, Rust, Smart Contract, DeFi, and related gigs.
+## How it works
 
-The browser remains visible so Upwork verification or two-factor authentication can be completed manually when required. SQLite is the only persistence format — no CSV exports.
+Every run follows the same pipeline:
 
----
+```
+Authenticate → Build feed list → Scrape each feed → Store to DB → Filter & display
+```
 
-## What It Does
+**Authenticate** — opens a dedicated Chrome profile. First run shows the login page; subsequent runs reuse the saved session. Google/Apple accounts and two-step verification are handled manually in the visible browser.
 
-1. **Authenticates** with your Upwork account using a persistent browser profile (reuses session across runs).
-2. **Scrapes multiple feeds** in one run:
-   - Best Matches feed
-   - Keyword search feeds (e.g. `solidity`, `rust blockchain`, `web3 developer`, `mev bot`, etc.) across up to N pages each
-3. **Filters for relevance** — only blockchain/Web3-related jobs (by title, description, and tags) are saved.
-4. **Persists to SQLite** with deduplication by job ID. Commits every 25 new/updated jobs so no data is lost if the run is interrupted.
-5. **Post-scrape filter** — after scraping, applies a `filter_config.json` rule set (proposals, job age, skill matching, country exclusion) and prints the top matching gigs.
+**Build feed list** — constructs a queue of URLs: the Best Matches page first, then one URL per (keyword × page) combination. With 12 default keywords and 5 pages each, that's 61 feeds per run.
 
----
+**Scrape each feed** — scrolls each page to trigger lazy-loading, parses every job card for title, description, skill tags, proposal count, and client country. Only jobs that match at least one blockchain/Web3 signal are kept.
 
-## Key Features
+**Store to DB** — new jobs are inserted; existing ones get their proposal count and country refreshed. A commit fires every 25 writes so progress survives a crash mid-run.
 
-- **Multi-feed scraping** — Best Matches + configurable keyword searches, each paginated up to N pages
-- **Crash resilience** — each feed is independently wrapped; a dead ChromeDriver connection skips that feed instead of crashing the run
-- **Partial commit safety** — periodic commits every 25 jobs + a final commit on clean exit or error
-- **Client country capture** — country shown on the job card is parsed and stored per job
-- **Post-scrape filter** — proposals range, max job age, skill matching, country exclusion, full-time job exclusion
-- **Windows-compatible** — Chrome version read from file metadata; fallback discovery across `ProgramFiles`, `ProgramFiles(x86)`, and `LOCALAPPDATA`
-- **Persistent browser profile** — completed logins and verifications are reused on later runs
+**Filter & display** — reads `filter_config.json` and prints jobs that pass all your criteria: age cutoff, proposal ceiling, skill match, country exclusion, no full-time roles.
 
 ---
 
-## Requirements
+## Setup
 
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/)
-- Google Chrome or Chromium
-
----
-
-## Installation
+**Prerequisites:** Python 3.12+, [uv](https://docs.astral.sh/uv/), Google Chrome.
 
 ```bash
 uv sync --locked
-```
-
----
-
-## Configuration
-
-Copy `.env.example` to `.env` and fill in your credentials:
-
-```bash
 cp .env.example .env
 ```
 
-`.env` must never be committed — it is gitignored.
+Open `.env` and fill in your details:
 
 ```dotenv
-UPWORK_USERNAME=your-email@example.com
-UPWORK_PASSWORD=your-password          # leave empty for Google/Apple accounts
+UPWORK_USERNAME=you@example.com
+UPWORK_PASSWORD=yourpassword        # omit for Google/Apple accounts
 
-UPWORK_FIRST_NAME=YourFirstName        # must match your Upwork profile name
+UPWORK_FIRST_NAME=Dhruv             # must match your Upwork profile exactly
 
-# Comma-separated search queries. Leave empty to use the built-in blockchain keyword list.
-UPWORK_SEARCH_QUERIES=
-# Pages to scrape per keyword search (default: 5)
-UPWORK_SEARCH_PAGES=5
-
-# Optional
-UPWORK_DATABASE_PATH=upwork_jobs.db
-BROWSER_EXECUTABLE_PATH=
-UPWORK_PROXY_SERVER=
-UPWORK_DRIVER_CACHE_DIR=~/.cache/upwork-scraper
-UPWORK_BROWSER_PROFILE_DIR=~/.local/state/upwork-scraper/chrome-profile
-UPWORK_VERIFICATION_TIMEOUT=120
-LOG_LEVEL=INFO
+UPWORK_SEARCH_QUERIES=              # comma-separated; leave blank for built-in list
+UPWORK_SEARCH_PAGES=5               # pages per keyword (each page ≈ 10 jobs)
 ```
 
-**Notes:**
-- `UPWORK_FIRST_NAME` is required — used to isolate the job results text during parsing.
-- `UPWORK_PASSWORD` is optional. Leave it unset for Google/Apple-linked accounts and complete login manually in the visible browser.
-- `UPWORK_SEARCH_QUERIES` — leave empty to use the built-in blockchain keyword list (`solidity`, `rust blockchain`, `smart contract developer`, `web3 developer`, `defi developer`, `ethereum developer`, `solana developer`, `trading bot crypto`, `mev bot`, `nft smart contract`, `blockchain developer`, `evm developer`).
-- `UPWORK_SEARCH_PAGES` — number of search result pages scraped per keyword (default: 5). Each page is ~10 jobs.
-- `UPWORK_PROXY_SERVER` accepts `http[s]://host:port`, `socks4://host:port`, `socks5://host:port`, or bare `host:port`.
+Everything else has a sensible default — see `.env.example` for the full list.
+
+> `.env` is gitignored. Never commit it.
 
 ---
 
-## Post-Scrape Filter (`filter_config.json`)
+## Running
 
-After each scrape, the scraper reads `filter_config.json` from the project root and prints jobs that pass all criteria. Edit this file to tune your preferences:
+```bash
+uv run upwork-scraper
+```
+
+Two lighter commands for sanity-checking:
+
+```bash
+uv run upwork-scraper --check-config    # validates settings + finds Chrome, no browser opens
+uv run upwork-scraper --validate-login  # full login check, no scraping, no DB writes
+```
+
+One-off overrides (take effect for a single run only):
+
+```
+--database PATH             SQLite file location
+--browser-path PATH         Chrome/Chromium executable
+--proxy-server VALUE        http/https/socks4/socks5 proxy
+--verification-timeout N    seconds to wait for manual verification
+--log-level LEVEL           DEBUG | INFO | WARNING
+```
+
+---
+
+## Default search keywords
+
+When `UPWORK_SEARCH_QUERIES` is blank, the scraper searches Upwork for:
+
+```
+solidity · rust blockchain · smart contract developer · web3 developer
+defi developer · ethereum developer · solana developer · trading bot crypto
+mev bot · nft smart contract · blockchain developer · evm developer
+```
+
+Supply your own comma-separated list to override these entirely.
+
+---
+
+## Filter rules (`filter_config.json`)
+
+Place this file in the project root. The scraper reads it at the end of every run.
 
 ```json
 {
-  "maxJobAge": { "value": 24, "unit": "hours" },
-  "proposals": { "min": 1, "max": 20 },
+  "maxJobAge":   { "value": 24, "unit": "hours" },
+  "proposals":   { "min": 1, "max": 20 },
   "skillsAndExpertise": {
     "matchAtLeast": 1,
-    "anyOf": ["Blockchain", "Solidity", "Smart Contract", "Rust", "Web3", "Solana", "TypeScript", "Node.js"]
+    "anyOf": [
+      "Blockchain", "Web3", "Solidity", "Smart Contract",
+      "Solana", "Rust", "TypeScript", "Node.js", "NFT", "Cryptocurrency"
+    ]
   },
-  "excludeClientCountries": ["Philippines", "Pakistan", "Nigeria", "Bangladesh", "Sri Lanka", "Any African country"],
+  "excludeClientCountries": [
+    "Philippines", "Pakistan", "Nigeria", "Bangladesh",
+    "Sri Lanka", "Any African country"
+  ],
   "jobType": ["fixed", "hourly"],
   "output": {
     "ifMissing": "mark as unknown and include the job, don't guess"
@@ -109,156 +116,70 @@ After each scrape, the scraper reads `filter_config.json` from the project root 
 }
 ```
 
-**Filter rules:**
-| Field | Behaviour |
+| Rule | What it does |
 |---|---|
-| `maxJobAge` | Excludes jobs older than N hours/days |
-| `proposals` | Excludes jobs with proposal count outside the range |
-| `skillsAndExpertise` | Job must match at least `matchAtLeast` skills from `anyOf` (checked against tags, title, and description) |
-| `excludeClientCountries` | Excludes jobs where the scraped `client_country` matches. `"Any African country"` expands to a full list. Jobs with unknown country are included. |
-| `jobType` | Full-time jobs (detected via title/description keywords) are excluded unless `"fulltime"` is listed |
+| `maxJobAge` | Drops jobs posted before the cutoff |
+| `proposals` | Drops jobs outside the min–max window |
+| `skillsAndExpertise` | Job must hit at least `matchAtLeast` skills from `anyOf` (checked against tags, title, and description) |
+| `excludeClientCountries` | Drops jobs whose scraped `client_country` is on the list. `"Any African country"` expands to a full continent list. Jobs with no country data are kept. |
+| `jobType` | Full-time roles (detected from description text) are dropped unless `"fulltime"` is in the list |
 
 ---
 
-## Usage
+## Database
 
-### Run a scrape
+Jobs land in `upwork_jobs.db` (SQLite). Schema:
 
-```bash
-uv run upwork-scraper
-```
-
-This scrapes Best Matches + all keyword searches across up to `UPWORK_SEARCH_PAGES` pages each, saves results to SQLite, then prints the post-filter report.
-
-### Validate config (no browser)
-
-```bash
-uv run upwork-scraper --check-config
-```
-
-### Validate login (no scrape)
-
-```bash
-uv run upwork-scraper --validate-login
-```
-
-Opens the browser, authenticates, and exits without touching the database. Useful for warming up the session before scheduling.
-
-### CLI overrides (one run only)
-
-| Flag | Description |
+| Column | Notes |
 |---|---|
-| `--database PATH` | Override SQLite database path |
-| `--browser-path PATH` | Override Chrome/Chromium executable |
-| `--proxy-server VALUE` | Override `UPWORK_PROXY_SERVER` |
-| `--verification-timeout SECONDS` | Override manual verification window |
-| `--log-level LEVEL` | Override log verbosity (`DEBUG`, `INFO`, `WARNING`) |
-
----
-
-## How the Scraper Works
-
-```
-Login / session reuse
-        │
-        ▼
-Build feed list:
-  [Best Matches] + [keyword_1 p1..p5] + [keyword_2 p1..p5] + ...
-        │
-        ▼
-For each feed URL:
-  • Navigate → scroll → wait for jobs to load
-  • Parse job cards (title, description, tags, proposals, client country)
-  • Filter for blockchain relevance
-  • INSERT new jobs / UPDATE existing ones
-  • Commit every 25 new/updated jobs
-  • On any error: log warning, skip feed, continue
-        │
-        ▼
-Final DB commit
-        │
-        ▼
-Apply filter_config.json → print top matches
-```
-
-### Database schema
-
-Jobs are stored in `upwork_jobs.db` (SQLite):
-
-| Column | Description |
-|---|---|
-| `job_id` | Upwork URL cipher — used for deduplication |
-| `job_url` | Full job URL |
-| `job_title` | Job title |
-| `posted_date` | Parsed from Upwork's relative timestamp |
-| `job_description` | Full description text from the card |
+| `job_id` | Upwork URL cipher — primary deduplication key |
+| `job_url` | Full job link |
+| `job_title` | |
+| `posted_date` | Converted from Upwork's relative timestamp |
+| `job_description` | Full card text |
 | `job_tags` | JSON array of skill tags |
-| `job_proposals` | Proposal count text (e.g. `"Fewer than 5"`, `"5 to 10"`) |
-| `client_country` | Country scraped from the job card |
-| `updated_at` | Last time this row was written |
+| `job_proposals` | Raw Upwork text e.g. `"Fewer than 5"`, `"5 to 10"` |
+| `client_country` | Parsed from the job card |
+| `updated_at` | Last write timestamp |
 
 ---
 
-## Scheduling (cron / Task Scheduler)
+## Scheduling
 
-### Linux/macOS — cron
+Each run is stateless — just launch it on a timer.
 
-Create `bin/launch_upwork_scraper.sh`:
-
-```bash
-#!/bin/bash
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$(dirname "$DIR")"
-nohup uv run upwork-scraper > /dev/null 2>&1 &
-```
+**Linux / macOS (cron, every 6 hours):**
 
 ```bash
-chmod +x bin/launch_upwork_scraper.sh
+0 */6 * * * cd /path/to/upwork-scraper && uv run upwork-scraper >> log/cron.log 2>&1
 ```
 
-Add to crontab (every 6 hours):
-
-```
-0 */6 * * * /path/to/UpworkScraper/bin/launch_upwork_scraper.sh
-```
-
-### Windows — Task Scheduler
+**Windows (Task Scheduler):**
 
 Create a `.bat` file:
 
 ```bat
 @echo off
-cd /d "D:\path\to\UpworkScraper"
+cd /d "D:\path\to\upwork-scraper"
 uv run upwork-scraper
 ```
 
-Schedule it via Task Scheduler to run every 6 hours.
+Schedule it to repeat every 6 hours under your user account.
 
 ---
 
-## Browser Profile and Login Sessions
+## Browser profile notes
 
-A dedicated persistent browser profile is used by default (`UPWORK_BROWSER_PROFILE_DIR`). On the first run the visible browser may ask for credentials, Google/Apple login, or two-step verification. Once authenticated, later runs reuse that session and open directly on Best Matches.
-
-**Do not:**
-- Share or commit the browser profile directory
-- Point it at your personal Chrome profile
-- Run multiple scraper processes against the same profile concurrently
+The scraper keeps a dedicated Chrome profile separate from your everyday browser. Don't point `UPWORK_BROWSER_PROFILE_DIR` at your personal profile, don't share it, and don't run two scraper instances against the same profile at the same time.
 
 ---
 
 ## Disclaimer
 
-This tool automates browsing of Upwork job listings to streamline a personal job search. Scraping Upwork may potentially conflict with their Terms of Service. Use responsibly, at your own discretion and risk. The author accepts no liability for misuse or legal consequences arising from its use.
-
----
-
-## Contributing
-
-Contributions are welcome. Open an issue or submit a pull request for bug reports and improvements.
+This tool automates browsing that you would otherwise do manually. It does not submit applications, send messages, or make any changes to your Upwork account. Automated scraping may be in conflict with Upwork's Terms of Service — use it at your own discretion and risk.
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).
