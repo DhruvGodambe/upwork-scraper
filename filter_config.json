@@ -14,6 +14,39 @@
   },
   "skillsAndExpertise": {
     "matchAtLeast": 1,
+    "requireAnyCoreSkill": true,
+    "coreSkills": [
+      "Blockchain",
+      "Web3",
+      "ERC-1155",
+      "ERC-777",
+      "TRC",
+      "Blockchain Development Framework",
+      "Blockchain Architecture",
+      "Solidity",
+      "Smart Contract",
+      "Solana",
+      "Anchor",
+      "Rust",
+      "NFT",
+      "Cryptocurrency",
+      "Bitcoin",
+      "DeFi",
+      "Ethereum",
+      "EVM",
+      "Phaser",
+      "HTML Game"
+    ],
+    "supportingSkills": [
+      "TypeScript",
+      "Node.js",
+      "Next.js",
+      "API Development",
+      "Backend",
+      "CI/CD",
+      "Web Application",
+      "Front-End Development Framework"
+    ],
     "anyOf": [
       "Blockchain",
       "Web3",
@@ -27,6 +60,14 @@
       "Solana",
       "Anchor",
       "Rust",
+      "NFT",
+      "Cryptocurrency",
+      "Bitcoin",
+      "DeFi",
+      "Ethereum",
+      "EVM",
+      "Phaser",
+      "HTML Game",
       "TypeScript",
       "Node.js",
       "Next.js",
@@ -34,12 +75,7 @@
       "Backend",
       "CI/CD",
       "Web Application",
-      "Front-End Development Framework",
-      "NFT",
-      "Cryptocurrency",
-      "Bitcoin",
-      "HTML Game",
-      "Phaser"
+      "Front-End Development Framework"
     ]
   },
   "excludeClientCountries": [

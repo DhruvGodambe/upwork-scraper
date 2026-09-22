@@ -29,6 +29,8 @@ _FULLTIME_SIGNALS = [
 @dataclass
 class FilterConfig:
     skills: list[str] = field(default_factory=list)
+    core_skills: list[str] = field(default_factory=list)
+    require_any_core_skill: bool = True
     match_at_least: int = 1
     proposals_min: int = 0
     proposals_max: int = 50
@@ -48,6 +50,8 @@ class FilterConfig:
         exclude_fulltime = "fulltime" not in job_types and "full-time" not in job_types
         return cls(
             skills=skills_cfg.get("anyOf", []),
+            core_skills=skills_cfg.get("coreSkills", []),
+            require_any_core_skill=skills_cfg.get("requireAnyCoreSkill", False),
             match_at_least=skills_cfg.get("matchAtLeast", 1),
             proposals_min=proposals_cfg.get("min", 0),
             proposals_max=proposals_cfg.get("max", 50),
@@ -176,6 +180,10 @@ def apply_filter(conn: sqlite3.Connection, config: FilterConfig) -> list[dict]:
         matched = _matched_skills(title, description, tags_json or "[]", config.skills)
         if config.match_at_least > 0 and len(matched) < config.match_at_least:
             continue
+        if config.require_any_core_skill and config.core_skills:
+            core_matched = _matched_skills(title, description, tags_json or "[]", config.core_skills)
+            if not core_matched:
+                continue
         # Use DB country first; fall back to description-based detection
         detected_country = db_country.strip() if db_country and db_country.strip() else _detect_country(title, description)
         if config.excluded_countries and detected_country.lower() != "unknown" and _is_excluded_country(detected_country, config.excluded_countries):
