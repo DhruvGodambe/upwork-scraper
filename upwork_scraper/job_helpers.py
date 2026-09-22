@@ -17,7 +17,6 @@ SEARCH_KEYWORDS: list[str] = [
     "ethereum developer",
     "solana developer",
     "trading bot crypto",
-    "mev bot",
     "nft smart contract",
     "blockchain developer",
     "evm developer",

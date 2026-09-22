@@ -11,7 +11,12 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import (
+    InvalidSessionIdException,
+    NoSuchWindowException,
+    TimeoutException,
+    WebDriverException,
+)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -240,6 +245,17 @@ def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, conn, logge
     return ScrapeCounts(inserted, updated, unchanged, failed, skipped)
 
 
+def _is_dead_session(exc: Exception) -> bool:
+    """Return True when the exception means Chrome is gone and needs a restart."""
+    return isinstance(exc, (InvalidSessionIdException, NoSuchWindowException)) or (
+        isinstance(exc, WebDriverException)
+        and any(
+            phrase in str(exc)
+            for phrase in ("invalid session id", "no such window", "disconnected", "not connected to DevTools")
+        )
+    )
+
+
 def _scrape_feed(
     driver, url: str, settings: Settings, cursor, conn, logger: logging.Logger
 ) -> ScrapeCounts:
@@ -282,6 +298,8 @@ def _scrape_feed(
         return _process_jobs(job_posts, job_urls, cursor, conn, logger)
 
     except Exception as exc:
+        if _is_dead_session(exc):
+            raise
         logger.warning("Feed %s failed (%s: %s) — skipping", url, type(exc).__name__, exc)
         return ScrapeCounts()
 
@@ -360,7 +378,28 @@ def main(argv: list[str] | None = None) -> bool:
 
         total = ScrapeCounts()
         for feed_url in feed_urls:
-            total = total + _scrape_feed(driver, feed_url, settings, cursor, conn, logger)
+            try:
+                total = total + _scrape_feed(driver, feed_url, settings, cursor, conn, logger)
+            except Exception as exc:
+                if not _is_dead_session(exc):
+                    raise
+                logger.warning("Chrome session lost (%s) — restarting browser", type(exc).__name__)
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                driver = None
+                conn.commit()
+                logger.info("Progress committed before browser restart")
+                driver, _ = launch_driver(settings)
+                login(driver, settings, lambda message: logger.warning(message))
+                logger.info("Browser restarted and re-authenticated — resuming from %s", feed_url)
+                try:
+                    total = total + _scrape_feed(driver, feed_url, settings, cursor, conn, logger)
+                except Exception as retry_exc:
+                    logger.warning(
+                        "Feed %s failed after restart (%s) — skipping", feed_url, retry_exc
+                    )
             time.sleep(1)
 
         conn.commit()
@@ -397,7 +436,7 @@ def main(argv: list[str] | None = None) -> bool:
             try:
                 driver.quit()
             except Exception:
-                logger.warning("Browser was already closed")
+                pass
         cursor.close()
         conn.close()
 

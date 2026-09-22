@@ -131,6 +131,30 @@ def _matched_skills(title: str, description: str, tags_json: str, skill_list: li
     return matched
 
 
+_PROPOSALS_SCORE = {
+    "fewer than 5": 10,
+    "5 to 10": 8,
+    "10 to 15": 6,
+    "15 to 20": 4,
+    "20 to 50": 2,
+    "50+": 0,
+}
+
+
+def _score_job(matched_skills: list[str], proposals_text: str, total_skills: int) -> float:
+    """Return a score out of 10 based on skill matches and proposal count."""
+    # Skills component: 0–6 points (60% weight)
+    skill_ratio = len(matched_skills) / max(total_skills, 1)
+    skill_score = round(skill_ratio * 6, 2)
+
+    # Proposals component: 0–4 points (40% weight)
+    key = (proposals_text or "").strip().lower()
+    raw_proposal_score = _PROPOSALS_SCORE.get(key, 3)  # unknown → middle score
+    proposal_score = round(raw_proposal_score / 10 * 4, 2)
+
+    return round(min(skill_score + proposal_score, 10.0), 1)
+
+
 def apply_filter(conn: sqlite3.Connection, config: FilterConfig) -> list[dict]:
     """Return jobs from ``conn`` that pass all applicable filter criteria."""
     cutoff = datetime.now() - timedelta(hours=config.max_age_hours)
@@ -156,6 +180,7 @@ def apply_filter(conn: sqlite3.Connection, config: FilterConfig) -> list[dict]:
         detected_country = db_country.strip() if db_country and db_country.strip() else _detect_country(title, description)
         if config.excluded_countries and detected_country.lower() != "unknown" and _is_excluded_country(detected_country, config.excluded_countries):
             continue
+        score = _score_job(matched, proposals or "", len(config.skills))
         results.append(
             {
                 "title": title or "unknown",
@@ -164,18 +189,11 @@ def apply_filter(conn: sqlite3.Connection, config: FilterConfig) -> list[dict]:
                 "matchedSkills": matched or ["unknown"],
                 "clientCountry": detected_country if detected_country else "unknown",
                 "posted": posted,
+                "score": score,
             }
         )
 
-    # Sort: fixed-price signals first (no "/hr" in title), then by recency
-    def sort_key(j: dict):
-        is_hourly = any(
-            kw in (j["title"] + j.get("proposalCount", "")).lower()
-            for kw in ["/hr", "hourly", "per hour"]
-        )
-        return (1 if is_hourly else 0, j["posted"])
-
-    results.sort(key=sort_key, reverse=False)
+    results.sort(key=lambda j: j["score"], reverse=True)
     return results
 
 
@@ -195,7 +213,8 @@ def print_results(results: list[dict]) -> None:
     print(sep)
     for i, job in enumerate(results, 1):
         skills_str = ", ".join(job["matchedSkills"])
-        print(f"\n[{i:>2}] {job['title']}")
+        score = job.get("score", 0)
+        print(f"\n[{i:>2}] {job['title']}  ★ {score}/10")
         print(f"       Link:      {job['link']}")
         print(f"       Proposals: {job['proposalCount']}")
         print(f"       Skills:    {skills_str}")

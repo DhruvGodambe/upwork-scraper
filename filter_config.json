@@ -48,7 +48,8 @@
     "Nigeria",
     "Bangladesh",
     "Sri Lanka",
-    "Any African country"
+    "Any African country",
+    "Ukraine"
   ],
   "output": {
     "fields": ["title", "link", "proposalCount", "matchedSkills", "clientCountry"],
