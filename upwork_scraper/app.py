@@ -21,7 +21,7 @@ from .browser import discover_browser, launch_driver
 from .config import ConfigurationError, Settings, load_settings, validate_proxy_server
 from .database import connect_to_db, create_db
 from .filter import FilterConfig, apply_filter, print_results
-from .job_helpers import SEARCH_KEYWORDS, build_search_url, is_relevant_job, parse_job_details
+from .job_helpers import SEARCH_KEYWORDS, build_best_matches_url, build_search_url, is_relevant_job, parse_job_details
 
 SCROLL_STEPS = 12
 SCROLL_PAUSE_SECONDS = 0.5
@@ -346,14 +346,18 @@ def main(argv: list[str] | None = None) -> bool:
         logger.info("Upwork authentication ready")
 
         search_queries = settings.search_queries if settings.search_queries else SEARCH_KEYWORDS
-        feed_urls = [BEST_MATCHES_URL] + [
-            build_search_url(q, page=p)
-            for q in search_queries
-            for p in range(1, settings.search_pages + 1)
-        ]
+        feed_urls = (
+            [build_best_matches_url(p) for p in range(1, settings.search_pages + 1)]
+            + [
+                build_search_url(q, page=p)
+                for q in search_queries
+                for p in range(1, settings.search_pages + 1)
+            ]
+        )
         logger.info(
-            "Running %d feed(s): Best Matches + %d keyword search(es) × %d page(s)",
+            "Running %d feed(s): Best Matches × %d page(s) + %d keyword search(es) × %d page(s)",
             len(feed_urls),
+            settings.search_pages,
             len(search_queries),
             settings.search_pages,
         )

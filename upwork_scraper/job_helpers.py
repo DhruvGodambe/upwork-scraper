@@ -33,6 +33,12 @@ def build_search_url(query: str, page: int = 1) -> str:
     return "https://www.upwork.com/nx/search/jobs?" + urlencode(params)
 
 
+def build_best_matches_url(page: int = 1) -> str:
+    """Return a paginated Best Matches URL."""
+    base = "https://www.upwork.com/nx/find-work/best-matches"
+    return base if page == 1 else f"{base}?page={page}"
+
+
 BLOCKCHAIN_KEYWORDS: list[str] = [
     # Languages
     "rust",
