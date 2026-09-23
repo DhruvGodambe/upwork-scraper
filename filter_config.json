@@ -3,7 +3,7 @@
   "experienceLevel": ["entry", "intermediate", "expert"],
   "jobType": ["fixed", "hourly"],
   "maxJobAge": {
-    "value": 48,
+    "value": 24,
     "unit": "hours"
   },
   "paymentVerified": false,
