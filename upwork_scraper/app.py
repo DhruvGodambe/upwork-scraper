@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import random
 import time
 from argparse import ArgumentParser
 from dataclasses import dataclass, replace
@@ -404,7 +405,9 @@ def main(argv: list[str] | None = None) -> bool:
                     logger.warning(
                         "Feed %s failed after restart (%s) — skipping", feed_url, retry_exc
                     )
-            time.sleep(1)
+            delay = random.uniform(5, 10)
+            logger.info("Waiting %.1fs before next feed...", delay)
+            time.sleep(delay)
 
         conn.commit()
         logger.info(
