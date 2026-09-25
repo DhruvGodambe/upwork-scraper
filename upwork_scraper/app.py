@@ -375,10 +375,14 @@ def main(argv: list[str] | None = None) -> bool:
         # High-yield keywords get full pages; low-yield ones get 2 pages max
         _HIGH_YIELD = {"solidity", "smart contract developer", "blockchain developer", "web3 developer"}
         search_queries = settings.search_queries if settings.search_queries else SEARCH_KEYWORDS
-        feed_urls = [build_best_matches_url(p) for p in range(1, settings.search_pages + 1)]
+        # Build feed list as (url, is_same_keyword_continuation) tuples for smart delay
+        _best_match_feeds = [(build_best_matches_url(p), p > 1) for p in range(1, settings.search_pages + 1)]
+        _keyword_feeds = []
         for q in search_queries:
             pages = settings.search_pages if q in _HIGH_YIELD else min(2, settings.search_pages)
-            feed_urls += [build_search_url(q, page=p) for p in range(1, pages + 1)]
+            _keyword_feeds += [(build_search_url(q, page=p), p > 1) for p in range(1, pages + 1)]
+        _all_feeds = _best_match_feeds + _keyword_feeds
+        feed_urls = [url for url, _ in _all_feeds]
         logger.info(
             "Running %d feed(s): Best Matches × %d page(s) + %d keyword search(es)",
             len(feed_urls),
@@ -387,7 +391,7 @@ def main(argv: list[str] | None = None) -> bool:
         )
 
         total = ScrapeCounts()
-        for feed_url in feed_urls:
+        for feed_url, is_continuation in _all_feeds:
             try:
                 total = total + _scrape_feed(driver, feed_url, settings, cursor, conn, logger)
             except Exception as exc:
@@ -410,7 +414,8 @@ def main(argv: list[str] | None = None) -> bool:
                     logger.warning(
                         "Feed %s failed after restart (%s) — skipping", feed_url, retry_exc
                     )
-            delay = random.uniform(5, 10)
+            # Short delay between pages of the same keyword; longer when switching
+            delay = random.uniform(2, 4) if is_continuation else random.uniform(6, 10)
             logger.info("Waiting %.1fs before next feed...", delay)
             time.sleep(delay)
 

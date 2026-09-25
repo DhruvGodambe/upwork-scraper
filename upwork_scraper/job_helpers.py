@@ -9,17 +9,27 @@ from datetime import datetime, timedelta
 from urllib.parse import unquote
 
 SEARCH_KEYWORDS: list[str] = [
+    # High-yield — 5 pages each
     "solidity",
-    "rust blockchain",
     "smart contract developer",
+    "blockchain developer",
     "web3 developer",
+    # Low-yield — 2 pages each
+    "rust blockchain",
     "defi developer",
     "ethereum developer",
     "solana developer",
     "trading bot crypto",
     "nft smart contract",
-    "blockchain developer",
     "evm developer",
+    "nft developer",
+    "crypto wallet developer",
+    "defi protocol",
+    "web3 frontend",
+    "token launch",
+    "solana program",
+    "anchor framework",
+    "crypto exchange developer",
 ]
 
 
@@ -68,7 +78,7 @@ BLOCKCHAIN_KEYWORDS: list[str] = [
     "erc1155",
     "hardhat",
     "foundry",
-    "anchor protocol",
+    "anchor",
     "ethers.js",
     "web3.js",
     "wagmi",
@@ -82,20 +92,30 @@ BLOCKCHAIN_KEYWORDS: list[str] = [
     "rust solana",
     "rust smart contract",
     "rust web3",
-    # Crypto-specific
+    # Broad crypto terms — caught here, filtered strictly at query time
     "cryptocurrency",
-    "crypto trading",
-    "trading bot crypto",
-    "arbitrage bot",
-    "flash loan",
-    "sniper bot",
-    "mempool",
-    "dex protocol",
-    "yield farming",
-    "staking contract",
+    "crypto",
+    "crypto wallet",
+    "crypto exchange",
+    "token launch",
     "token contract",
+    "coin",
     "bitcoin",
     "btc",
+    "nft marketplace",
+    "nft mint",
+    "nft collection",
+    "wallet",
+    "staking",
+    "yield farming",
+    "liquidity",
+    "dex",
+    "arbitrage",
+    "flash loan",
+    "trading bot crypto",
+    "sniper bot",
+    "mempool",
+    "exchange",
 ]
 
 
