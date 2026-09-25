@@ -9,7 +9,7 @@ import random
 import time
 from argparse import ArgumentParser
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from selenium.common.exceptions import (
@@ -185,6 +185,7 @@ def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, conn, logge
     failed = 0
     skipped = max(0, len(job_posts) - len(job_urls))  # mismatch + filtered
     processable = min(len(job_posts), len(job_urls))
+    age_cutoff = datetime.now() - timedelta(hours=48)
     for index in range(processable):
         post = job_posts[index]
         try:
@@ -194,7 +195,14 @@ def _process_jobs(job_posts: list[str], job_urls: list[str], cursor, conn, logge
                 skipped += 1
                 logger.debug("Skipped irrelevant job: %s", details["job_title"])
                 continue
-            cursor.execute("SELECT job_proposals FROM jobs WHERE job_id = ?", (details["job_id"],))
+            # Skip jobs older than 48 hours at scrape time
+            if details["posted_date"] < age_cutoff:
+                skipped += 1
+                logger.debug("Skipped stale job (>48h): %s", details["job_title"])
+                continue
+            cursor.execute(
+                "SELECT job_proposals, updated_at FROM jobs WHERE job_id = ?", (details["job_id"],)
+            )
             existing = cursor.fetchone()
             if existing is not None:
                 stored_proposals = existing[0] or ""
@@ -364,21 +372,18 @@ def main(argv: list[str] | None = None) -> bool:
         login(driver, settings, lambda message: logger.warning(message))
         logger.info("Upwork authentication ready")
 
+        # High-yield keywords get full pages; low-yield ones get 2 pages max
+        _HIGH_YIELD = {"solidity", "smart contract developer", "blockchain developer", "web3 developer"}
         search_queries = settings.search_queries if settings.search_queries else SEARCH_KEYWORDS
-        feed_urls = (
-            [build_best_matches_url(p) for p in range(1, settings.search_pages + 1)]
-            + [
-                build_search_url(q, page=p)
-                for q in search_queries
-                for p in range(1, settings.search_pages + 1)
-            ]
-        )
+        feed_urls = [build_best_matches_url(p) for p in range(1, settings.search_pages + 1)]
+        for q in search_queries:
+            pages = settings.search_pages if q in _HIGH_YIELD else min(2, settings.search_pages)
+            feed_urls += [build_search_url(q, page=p) for p in range(1, pages + 1)]
         logger.info(
-            "Running %d feed(s): Best Matches × %d page(s) + %d keyword search(es) × %d page(s)",
+            "Running %d feed(s): Best Matches × %d page(s) + %d keyword search(es)",
             len(feed_urls),
             settings.search_pages,
             len(search_queries),
-            settings.search_pages,
         )
 
         total = ScrapeCounts()
