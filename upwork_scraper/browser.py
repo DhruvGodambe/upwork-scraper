@@ -122,31 +122,43 @@ def _cache_driver(driver, destination: Path) -> None:
 
 
 def _minimize_driver_window(driver) -> None:
-    """Minimize the Chrome window owned by this driver without stealing focus."""
+    """Minimize the Chrome window in a background thread, retrying until found."""
     if sys.platform != "win32":
         return
-    try:
-        import ctypes
-        pid = driver.browser_pid
-        SW_SHOWMINNOACTIVE = 7
+
+    import ctypes
+    import threading
+    import time
+
+    def _worker() -> None:
+        try:
+            pid = driver.browser_pid
+        except Exception:
+            return
 
         user32 = ctypes.windll.user32
-        found: list[int] = []
-
-        def _cb(hwnd: int, _: int) -> bool:
-            if user32.IsWindowVisible(hwnd):
-                proc_id = ctypes.c_ulong()
-                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
-                if proc_id.value == pid:
-                    found.append(hwnd)
-            return True
-
+        SW_SHOWMINNOACTIVE = 7
         WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
-        user32.EnumWindows(WNDENUMPROC(_cb), 0)
-        for hwnd in found:
-            user32.ShowWindow(hwnd, SW_SHOWMINNOACTIVE)
-    except Exception:
-        pass
+
+        for _ in range(40):  # retry every 100ms for up to 4 seconds
+            found: list[int] = []
+
+            def _cb(hwnd: int, _: int) -> bool:
+                if user32.IsWindowVisible(hwnd):
+                    proc_id = ctypes.c_ulong()
+                    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
+                    if proc_id.value == pid:
+                        found.append(hwnd)
+                return True
+
+            user32.EnumWindows(WNDENUMPROC(_cb), 0)
+            if found:
+                for hwnd in found:
+                    user32.ShowWindow(hwnd, SW_SHOWMINNOACTIVE)
+                return
+            time.sleep(0.1)
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def _launch_with_driver(settings: Settings, spec: BrowserSpec, driver_path: Path | None = None):
