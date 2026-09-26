@@ -121,8 +121,13 @@ def _cache_driver(driver, destination: Path) -> None:
     temporary_path.replace(destination)
 
 
-def _minimize_driver_window(driver) -> None:
-    """Minimize the Chrome window in a background thread, retrying until found."""
+def _background_driver_window(driver) -> None:
+    """Shrink Chrome to a small window and push it behind all other windows.
+
+    Minimizing causes ChromeDriver's CDP connection to throttle, so we keep the
+    window technically visible but small and at the bottom of the Z-order so it
+    stays behind whatever the user is working on.
+    """
     if sys.platform != "win32":
         return
 
@@ -137,7 +142,16 @@ def _minimize_driver_window(driver) -> None:
             return
 
         user32 = ctypes.windll.user32
-        SW_SHOWMINNOACTIVE = 7
+        HWND_BOTTOM = 1
+        SWP_NOACTIVATE = 0x0010
+
+        screen_w = user32.GetSystemMetrics(0)
+        screen_h = user32.GetSystemMetrics(1)
+        win_w, win_h = 600, 400
+        # bottom-right corner, above taskbar
+        x = screen_w - win_w - 10
+        y = screen_h - win_h - 60
+
         WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
 
         for _ in range(40):  # retry every 100ms for up to 4 seconds
@@ -154,7 +168,7 @@ def _minimize_driver_window(driver) -> None:
             user32.EnumWindows(WNDENUMPROC(_cb), 0)
             if found:
                 for hwnd in found:
-                    user32.ShowWindow(hwnd, SW_SHOWMINNOACTIVE)
+                    user32.SetWindowPos(hwnd, HWND_BOTTOM, x, y, win_w, win_h, SWP_NOACTIVATE)
                 return
             time.sleep(0.1)
 
@@ -181,7 +195,7 @@ def _launch_with_driver(settings: Settings, spec: BrowserSpec, driver_path: Path
     if driver_path is not None:
         arguments["driver_executable_path"] = str(driver_path)
     driver = uc.Chrome(**arguments)
-    _minimize_driver_window(driver)
+    _background_driver_window(driver)
     return driver
 
 
