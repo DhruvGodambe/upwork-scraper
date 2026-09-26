@@ -121,12 +121,42 @@ def _cache_driver(driver, destination: Path) -> None:
     temporary_path.replace(destination)
 
 
+def _minimize_driver_window(driver) -> None:
+    """Minimize the Chrome window owned by this driver without stealing focus."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        pid = driver.browser_pid
+        SW_SHOWMINNOACTIVE = 7
+
+        user32 = ctypes.windll.user32
+        found: list[int] = []
+
+        def _cb(hwnd: int, _: int) -> bool:
+            if user32.IsWindowVisible(hwnd):
+                proc_id = ctypes.c_ulong()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
+                if proc_id.value == pid:
+                    found.append(hwnd)
+            return True
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
+        user32.EnumWindows(WNDENUMPROC(_cb), 0)
+        for hwnd in found:
+            user32.ShowWindow(hwnd, SW_SHOWMINNOACTIVE)
+    except Exception:
+        pass
+
+
 def _launch_with_driver(settings: Settings, spec: BrowserSpec, driver_path: Path | None = None):
     options = uc.ChromeOptions()
     options.headless = False
     options.page_load_strategy = "eager"
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--start-minimized")
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-renderer-backgrounding")
     options.user_data_dir = str(settings.browser_profile_dir)
     if settings.proxy_server:
         options.add_argument(f"--proxy-server={settings.proxy_server}")
@@ -138,7 +168,9 @@ def _launch_with_driver(settings: Settings, spec: BrowserSpec, driver_path: Path
     }
     if driver_path is not None:
         arguments["driver_executable_path"] = str(driver_path)
-    return uc.Chrome(**arguments)
+    driver = uc.Chrome(**arguments)
+    _minimize_driver_window(driver)
+    return driver
 
 
 def launch_driver(settings: Settings):
